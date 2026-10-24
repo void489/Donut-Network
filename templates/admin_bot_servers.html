@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Servers — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .saved-banner {
+            background: var(--success-tint); border: 1px solid rgba(34,197,94,0.3); color: #4ade80;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+        .error-banner {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.3); color: #f87171;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+
+        .search-row input {
+            width: 100%; max-width: 340px; background: var(--input-bg); border: 1px solid var(--border);
+            border-radius: var(--r-sm); padding: 10px 13px; color: var(--text-bright); font-family: var(--font-body);
+            font-size: 13.5px; margin-bottom: 20px; outline: none;
+        }
+        .search-row input:focus { border-color: var(--border-focus); }
+
+        .server-list { display: flex; flex-direction: column; gap: 10px; }
+        .server-row {
+            display: flex; align-items: center; gap: 14px;
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+            padding: 14px 16px;
+        }
+        .server-row img.icon, .server-row .icon-fallback {
+            width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+        }
+        .server-row .icon-fallback {
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-muted); color: var(--text-muted); font-weight: 800; font-size: 16px;
+        }
+        .server-info { flex: 1; min-width: 0; }
+        .server-info .name { font-size: 14.5px; font-weight: 700; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .server-info .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .server-info .meta .owner-tag { color: var(--warning); font-weight: 700; }
+        .server-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+        .server-actions button {
+            border-radius: var(--r-sm); padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+            font-family: inherit; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text-main);
+        }
+        .server-actions button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .server-actions .btn-leave {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.25); color: #f87171;
+        }
+        .server-actions .btn-leave:hover { background: rgba(239,68,68,0.2); }
+        .server-actions .btn-manage {
+            border-radius: var(--r-sm); padding: 8px 14px; font-size: 12.5px; font-weight: 700; text-decoration: none;
+            border: 1px solid rgba(88,101,242,0.4); background: var(--accent-tint); color: var(--accent-light);
+        }
+        .server-actions .btn-manage:hover { background: var(--accent-glow); }
+        .server-actions button:disabled { opacity: .5; cursor: default; }
+        .invite-result { font-size: 12px; margin-top: 6px; word-break: break-all; }
+        .invite-result a { color: var(--accent-light); }
+        .invite-result.error { color: #f87171; }
+        .ai-form { display: flex; gap: 14px; align-items: center; margin-top: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-main); }
+        .ai-form label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+        .ai-form input[type=checkbox] { accent-color: var(--accent); }
+        .ai-form button { border-radius: var(--r-sm); padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text-main); }
+        .ai-form button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .empty-note { color: var(--text-muted); font-size: 13.5px; padding: 30px 0; text-align: center; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>🌍 Bot Servers</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers" class="active">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    {% if request.args.get('left') == '1' %}<div class="saved-banner">✅ Left the server.</div>{% endif %}
+    {% if request.args.get('error') == 'leave' %}<div class="error-banner">⚠️ Couldn't leave that server — check the logs.</div>{% endif %}
+    {% if request.args.get('ai_saved') == '1' %}<div class="saved-banner">✅ AI settings saved.</div>{% endif %}
+    {% if request.args.get('error') == 'db' %}<div class="error-banner">⚠️ Database unavailable — not saved.</div>{% endif %}
+    {% if request.args.get('error') == 'manage' %}<div class="error-banner">⚠️ Couldn't load that server (is the bot still in it?).</div>{% endif %}
+    {% if request.args.get('error') == 'notoken' %}<div class="error-banner">⚠️ Bot token not configured.</div>{% endif %}
+
+    <form class="search-row" method="GET" onsubmit="return false;">
+        <input type="text" id="server-search" placeholder="Filter by name or ID…" oninput="filterServers()">
+    </form>
+
+    {% if guilds %}
+    <div class="server-list" id="server-list">
+        {% for g in guilds %}
+        <div class="server-row" data-search="{{ (g.name or '')|lower }} {{ g.id }}">
+            {% if g.icon %}
+            <img class="icon" src="https://cdn.discordapp.com/icons/{{ g.id }}/{{ g.icon }}.png" alt="">
+            {% else %}
+            <div class="icon-fallback">{{ (g.name or '?')[0]|upper }}</div>
+            {% endif %}
+            <div class="server-info">
+                <div class="name">{{ g.name }}{% if g.owner %} <span class="owner-tag">· bot owns this server</span>{% endif %}</div>
+                <div class="meta">
+                    ID: {{ g.id }}
+                    {% if g.approximate_member_count is not none %} · {{ g.approximate_member_count }} members{% endif %}
+                </div>
+                <form class="ai-form" method="POST" action="/admin/bot-servers/{{ g.id }}/ai">
+                    <label><input type="checkbox" name="ai_enabled" {{ 'checked' if g.ai_enabled else '' }}> 🤖 AI Chat</label>
+                    <label><input type="checkbox" name="ai_search" {{ 'checked' if g.ai_search else '' }}> 🔎 Web Search</label>
+                    <button type="submit">Save</button>
+                </form>
+                <div class="invite-result" id="invite-result-{{ g.id }}" style="display:none;"></div>
+            </div>
+            <div class="server-actions">
+                <a class="btn-manage" href="/admin/bot-servers/{{ g.id }}/manage">⚙️ Manage</a>
+                <button onclick="getInvite('{{ g.id }}', this)">Get Invite</button>
+                <form method="POST" action="/admin/bot-servers/{{ g.id }}/leave" style="display:inline;"
+                      onsubmit='return confirm({{ ("Make the bot leave " ~ (g.name or "this server") ~ "? This removes all its features from that server immediately.") | tojson }});'>
+                    <button type="submit" class="btn-leave">Leave</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-note">The bot isn't in any servers right now.</div>
+    {% endif %}
+</div>
+
+<script>
+function filterServers() {
+    const q = document.getElementById('server-search').value.trim().toLowerCase();
+    document.querySelectorAll('#server-list .server-row').forEach(row => {
+        row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+    });
+}
+
+async function getInvite(guildId, btn) {
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Working…';
+    const resultEl = document.getElementById('invite-result-' + guildId);
+    try {
+        const r = await fetch(`/admin/bot-servers/${guildId}/invite`, { method: 'POST' });
+        const data = await r.json();
+        resultEl.style.display = 'block';
+        if (data.ok) {
+            resultEl.className = 'invite-result';
+            resultEl.innerHTML = `<a href="${data.invite_url}" target="_blank" rel="noopener">${data.invite_url}</a>`;
+        } else {
+            resultEl.className = 'invite-result error';
+            resultEl.textContent = '⚠️ ' + (data.error || 'Could not create an invite.');
+        }
+    } catch (e) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'invite-result error';
+        resultEl.textContent = '⚠️ Request failed: ' + e;
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+}
+</script>
+</body>
+</html>

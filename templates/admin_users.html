@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .search-row input {
+            width: 100%; max-width: 340px; background: var(--input-bg); border: 1px solid var(--border);
+            border-radius: var(--r-sm); padding: 10px 13px; color: var(--text-bright); font-family: var(--font-body);
+            font-size: 13.5px; margin-bottom: 20px; outline: none;
+        }
+        .search-row input:focus { border-color: var(--border-focus); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.05em; color: var(--text-muted); }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .plan-pill {
+            display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+        }
+        .plan-pill.free  { background: var(--bg-muted); color: var(--text-muted); }
+        .plan-pill.pro   { background: rgba(88,101,242,0.15); color: var(--accent-light); }
+        .plan-pill.elite { background: var(--warning-tint); color: var(--warning); }
+        .usage-bar-wrap { width: 110px; height: 6px; background: var(--bg-muted); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+        .usage-bar { height: 100%; background: var(--accent); }
+        select {
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 6px 8px; color: var(--text-bright); font-family: var(--font-body); font-size: 12.5px;
+        }
+        .plan-form { display: flex; gap: 6px; align-items: center; }
+        .plan-form button {
+            background: var(--bg-muted); border: 1px solid var(--border); color: var(--text-main);
+            border-radius: var(--r-sm); padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        .plan-form button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .empty-note { color: var(--text-muted); font-size: 13.5px; padding: 30px 0; text-align: center; }
+
+        /* MC session column */
+        .mc-cell { font-size: 12px; }
+        .mc-counts { color: var(--text-muted); margin-bottom: 4px; }
+        .mc-counts strong { color: var(--text-main); }
+        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
+        .badge .dot { width: 5px; height: 5px; border-radius: 50%; }
+        .badge.online  { background: rgba(52,211,153,0.12); color: var(--ok, #34D399); }
+        .badge.online .dot { background: var(--ok, #34D399); }
+        .badge.offline { background: var(--bg-muted); color: var(--text-muted); }
+        .badge.offline .dot { background: var(--text-muted); }
+        .badge.linked   { background: rgba(88,101,242,0.15); color: var(--accent-light); }
+        .badge.unlinked { background: rgba(251,191,36,0.12); color: var(--warning, #FBBF24); }
+        .badge.none { background: var(--bg-muted); color: var(--text-muted); }
+        .manage-link {
+            display: inline-block; margin-top: 6px; font-size: 11.5px; font-weight: 700;
+            color: var(--accent-light); text-decoration: none;
+        }
+        .manage-link:hover { text-decoration: underline; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>👤 Users</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/plans">🧩 Plans &amp; Limits</a>
+        <a href="/admin/users" class="active">👤 Users</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <form class="search-row" method="GET">
+        <input type="text" name="q" placeholder="Search by Discord ID…" value="{{ search }}">
+    </form>
+
+    {% if users %}
+    <table>
+        <thead>
+            <tr>
+                <th>Discord ID</th>
+                <th>Plan</th>
+                <th>Commands Today</th>
+                <th>Active Auto Commands</th>
+                <th>MC Sessions</th>
+                <th>Change Plan</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr data-discord-id="{{ u.discord_id }}">
+                <td>{{ u.discord_id }}</td>
+                <td><span class="plan-pill {{ u.plan }}">{{ u.plan_label }}</span></td>
+                <td>
+                    {{ u.commands_used }} / {{ u.commands_limit }}
+                    <div class="usage-bar-wrap"><div class="usage-bar" style="width: {{ ((u.commands_used / u.commands_limit * 100) if u.commands_limit else 0) | round(0, 'floor') }}%;"></div></div>
+                </td>
+                <td>{{ u.auto_active }} / {{ u.auto_limit }}</td>
+                <td class="mc-cell">
+                    {% if u.mc_sessions %}
+                    <div class="mc-counts"><strong>{{ u.mc_sessions }}</strong> session{{ 's' if u.mc_sessions != 1 else '' }}</div>
+                    <span class="badge {{ 'linked' if u.mc_linked else 'unlinked' }}">
+                        {{ '🔗' if u.mc_linked else '⚠️' }} {{ u.mc_linked }}/{{ u.mc_sessions }} linked
+                    </span>
+                    <span class="badge offline mc-online-badge" data-online-for="{{ u.discord_id }}">⏳ checking…</span>
+                    <br>
+                    <a class="manage-link" href="/admin/users/{{ u.discord_id }}">Manage sessions →</a>
+                    {% else %}
+                    <span class="badge none">No MC sessions</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form class="plan-form" method="POST" action="/admin/users/{{ u.discord_id }}/plan">
+                        <select name="plan">
+                            {% for p in plan_order %}
+                            <option value="{{ p }}" {{ 'selected' if p == u.plan else '' }}>{{ p|capitalize }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Set</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-note">No AFK/dashboard activity recorded yet{{ ' for that search' if search else '' }}.</div>
+    {% endif %}
+</div>
+
+<script>
+    // Lazy-load live online status after the page renders — this hits the
+    // Node MC bot service once per session, so it's kept separate from the
+    // initial page load rather than blocking it.
+    fetch('/admin/mc/live-status')
+        .then(r => r.json())
+        .then(data => {
+            document.querySelectorAll('.mc-online-badge').forEach(badge => {
+                const did = badge.dataset.onlineFor;
+                const entry = data[did];
+                const online = entry ? entry.online : 0;
+                if (online > 0) {
+                    badge.className = 'badge online mc-online-badge';
+                    const servers = (entry.servers || []).slice(0, 2).join(', ');
+                    badge.innerHTML = `<span class="dot"></span> ${online} online${servers ? ' — ' + servers : ''}`;
+                } else {
+                    badge.className = 'badge offline mc-online-badge';
+                    badge.innerHTML = `<span class="dot"></span> All offline`;
+                }
+            });
+        })
+        .catch(() => {
+            document.querySelectorAll('.mc-online-badge').forEach(badge => {
+                badge.textContent = 'Status unavailable';
+            });
+        });
+</script>
+</body>
+</html>

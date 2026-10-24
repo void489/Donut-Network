@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Logs — {{ guild.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a { text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px; border-radius: var(--r-sm); }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .tabs a { text-decoration: none; font-size: 13.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-sm);
+                  color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .tabs a.active { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+        .tabs a:hover { border-color: rgba(88,101,242,0.4); }
+
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+        @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+        .stat { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 18px; }
+        .stat .v { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .stat .k { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+        .stat.green .v { color: #4ade80; } .stat.red .v { color: #f87171; } .stat.grey .v { color: var(--text-main); }
+
+        .pills { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .pills a { text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 6px 14px; border-radius: 99px;
+                   color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .pills a.on { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+
+        .pl-wrap { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow-x: auto; }
+        table.pl { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.pl th { text-align: left; padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+                      color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+        table.pl td { padding: 12px 14px; border-bottom: 1px solid var(--border-soft); color: var(--text-main); vertical-align: top; }
+        table.pl tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+        .b-paid { background: rgba(34,197,94,.15); color: #4ade80; }
+        .b-not_detected, .b-error { background: rgba(239,68,68,.15); color: #f87171; }
+        .b-cancelled, .b-interrupted { background: rgba(90,96,112,.25); color: #9da3af; }
+        .b-tracking { background: rgba(245,158,11,.15); color: #fbbf24; }
+        .amt { font-weight: 800; color: var(--text-bright); white-space: nowrap; }
+        .msg { font-family: monospace; font-size: 11.5px; color: var(--text-muted); max-width: 220px; word-break: break-word; }
+        table.pl th.act, table.pl td.act { position: sticky; right: 0; background: var(--bg-surface); z-index: 2;
+                      box-shadow: -8px 0 12px -8px rgba(0,0,0,.45); }
+        .del { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.35); border-radius: var(--r-sm);
+               padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .del:hover { background: rgba(239,68,68,.25); }
+        .flash { padding: 12px 16px; border-radius: var(--r-sm); margin-bottom: 16px; font-size: 13px; font-weight: 700; }
+        .flash.ok { background: rgba(34,197,94,.15); color: #4ade80; } .flash.bad { background: rgba(239,68,68,.15); color: #f87171; }
+        .empty { padding: 40px; text-align: center; color: var(--text-muted); }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>💳 {{ guild.name }}</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers" class="active">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <div class="tabs">
+        <a href="/admin/bot-servers/{{ guild.id }}/manage">⚙️ Setup &amp; Builds</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/payments" class="active">💳 Payment Logs</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/dashboard">📈 Dashboard</a>
+    </div>
+
+    {% if request.args.get('deleted') %}<div class="flash ok">🗑️ Payment removed everywhere{% if request.args.get('n', '0') != '0' %} ({{ request.args.get('n') }} linked record(s) removed too){% endif %}.</div>{% endif %}
+    {% if request.args.get('error') == 'notfound' %}<div class="flash bad">That payment no longer exists.</div>{% endif %}
+
+    <div class="stats">
+        <div class="stat green"><div class="v">{{ stats.paid_total_fmt }}</div><div class="k">💰 Total received</div></div>
+        <div class="stat green"><div class="v">{{ stats.paid }}</div><div class="k">✅ Paid</div></div>
+        <div class="stat red"><div class="v">{{ stats.not_detected }}</div><div class="k">⌛ Not detected</div></div>
+        <div class="stat grey"><div class="v">{{ stats.cancelled }}</div><div class="k">🚫 Cancelled</div></div>
+    </div>
+
+    <div class="pills">
+        <a href="?" class="{{ 'on' if not flt else '' }}">All ({{ total }})</a>
+        <a href="?status=paid" class="{{ 'on' if flt == 'paid' else '' }}">✅ Paid</a>
+        <a href="?status=not_detected" class="{{ 'on' if flt == 'not_detected' else '' }}">⌛ Not detected</a>
+        <a href="?status=cancelled" class="{{ 'on' if flt == 'cancelled' else '' }}">🚫 Cancelled</a>
+        <a href="?status=other" class="{{ 'on' if flt == 'other' else '' }}">Other</a>
+    </div>
+
+    <div class="pl-wrap">
+        {% if rows %}
+        <table class="pl">
+            <tr><th>Status</th><th>Time (UTC)</th><th>Build</th><th>Payer IGN</th><th>Receiver</th><th>Amount</th><th>Customer</th><th>Claimed by</th><th>Server message</th><th class="act">Action</th></tr>
+            {% for r in rows %}
+            <tr>
+                <td><span class="badge b-{{ r.status }}">
+                    {% if r.status == 'paid' %}✅ Paid{% elif r.status == 'not_detected' %}⌛ Not detected{% elif r.status == 'cancelled' %}🚫 Cancelled
+                    {% elif r.status == 'tracking' %}⏳ Tracking{% elif r.status == 'interrupted' %}⚠️ Interrupted{% else %}❌ Error{% endif %}</span></td>
+                <td>{{ r.when }}</td>
+                <td>🧱 {{ r.build }}</td>
+                <td><b>{{ r.payer }}</b></td>
+                <td>{{ r.receiver }}</td>
+                <td class="amt">{{ r.amount }}</td>
+                <td>{{ r.customer }}</td>
+                <td>{{ r.claimed_by or '—' }}</td>
+                <td class="msg">{{ r.message or '—' }}</td>
+                <td class="act">
+                    <form method="post" action="/admin/bot-servers/{{ guild.id }}/payments/{{ r.id }}/delete"
+                          onsubmit="return confirm('Remove this payment everywhere? This also removes its tracker entry, builder payouts and review, and updates the recap totals. This cannot be undone.');">
+                        <button type="submit" class="del">🗑️ Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <div class="empty">No payments logged yet. Every <b>Start Pay</b> in a build ticket shows up here.</div>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

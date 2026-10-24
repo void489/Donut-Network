@@ -1,0 +1,13 @@
+[phases.setup]
+nixPkgs = ["python313", "nodejs_20", "nodePackages.npm"]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "cd mc-bot && npm install"
+]
+
+[start]
+cmd = "python bot.py"
+
+

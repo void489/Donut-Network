@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ identity.username }} — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 22px; font-weight: 800; color: var(--text-bright); display: flex; align-items: center; gap: 10px; }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        /* ── profile header ── */
+        .profile-card {
+            display: flex; align-items: center; gap: 16px;
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--r-md); padding: 18px 22px; margin-bottom: 22px;
+        }
+        .profile-card img { width: 56px; height: 56px; border-radius: 50%; }
+        .profile-name { font-size: 18px; font-weight: 800; color: var(--text-bright); }
+        .profile-id { font-size: 12.5px; color: var(--text-muted); font-family: monospace; }
+        .profile-stats { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+        .pstat { text-align: right; }
+        .pstat .n { font-size: 17px; font-weight: 800; color: var(--text-bright); }
+        .pstat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+        .plan-pill {
+            display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+        }
+        .plan-pill.free  { background: var(--bg-muted); color: var(--text-muted); }
+        .plan-pill.pro   { background: rgba(88,101,242,0.15); color: var(--accent-light); }
+        .plan-pill.elite { background: var(--warning-tint); color: var(--warning); }
+        .plan-form { display: flex; gap: 6px; align-items: center; }
+        .plan-form select {
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 6px 8px; color: var(--text-bright); font-family: var(--font-body); font-size: 12.5px;
+        }
+        .plan-form button {
+            background: var(--bg-muted); border: 1px solid var(--border); color: var(--text-main);
+            border-radius: var(--r-sm); padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        .plan-form button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        /* ── section header ── */
+        .section-head { display: flex; justify-content: space-between; align-items: center; margin: 26px 0 14px; }
+        .section-head h2 { font-size: 15px; font-weight: 800; color: var(--text-bright); }
+        .btn-new {
+            background: var(--accent); border: none; color: #fff; font-size: 12.5px; font-weight: 700;
+            padding: 8px 14px; border-radius: var(--r-sm); cursor: pointer;
+        }
+        .btn-new:hover { opacity: .9; }
+
+        /* ── session card ── */
+        .session-card {
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-md);
+            padding: 18px 20px; margin-bottom: 16px;
+        }
+        .sc-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+        .sc-label { font-size: 14.5px; font-weight: 800; color: var(--text-bright); }
+        .sc-username { font-size: 12.5px; color: var(--text-muted); font-family: monospace; }
+
+        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+        .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .badge.online  { background: rgba(52,211,153,0.12); color: var(--ok, #34D399); }
+        .badge.online .dot { background: var(--ok, #34D399); }
+        .badge.offline { background: var(--bg-muted); color: var(--text-muted); }
+        .badge.offline .dot { background: var(--text-muted); }
+        .badge.error   { background: rgba(248,113,113,0.12); color: var(--danger, #F87171); }
+        .badge.error .dot { background: var(--danger, #F87171); }
+        .badge.linked   { background: rgba(88,101,242,0.15); color: var(--accent-light); }
+        .badge.unlinked { background: rgba(251,191,36,0.12); color: var(--warning, #FBBF24); }
+        .badge.unreachable { background: rgba(248,113,113,0.08); color: var(--text-muted); }
+
+        .sc-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .sc-meta .m-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px; }
+        .sc-meta .m-value { font-size: 13px; font-weight: 600; color: var(--text-main); }
+
+        .sc-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+        .sc-btn {
+            background: var(--bg-muted); border: 1px solid var(--border); color: var(--text-main);
+            border-radius: var(--r-sm); padding: 7px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+        }
+        .sc-btn:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .sc-btn.danger:hover { border-color: rgba(248,113,113,0.4); color: var(--danger, #F87171); }
+        .sc-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .sc-btn.primary:hover { opacity: .9; color: #fff; }
+
+        /* login code box */
+        .login-box {
+            display: none; margin-top: 14px; padding: 16px; border-radius: var(--r-sm);
+            background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.25);
+        }
+        .login-box.show { display: block; }
+        .login-box .code {
+            font-size: 24px; font-weight: 900; letter-spacing: 5px; color: var(--warning, #FBBF24);
+            margin: 8px 0; text-align: center;
+        }
+        .login-box a.verify-link {
+            display: block; text-align: center; text-decoration: none; color: #fff; font-weight: 700;
+            background: var(--accent); padding: 9px; border-radius: var(--r-sm); font-size: 12.5px; margin-top: 8px;
+        }
+        .login-box p { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+
+        /* connect form */
+        .connect-form {
+            display: none; margin-top: 14px; gap: 8px; flex-wrap: wrap; align-items: center;
+        }
+        .connect-form.show { display: flex; }
+        .connect-form input, .connect-form select {
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 7px 10px; color: var(--text-bright); font-size: 12.5px;
+        }
+        .connect-form input[name="server"] { flex: 1; min-width: 180px; }
+
+        /* auto commands */
+        .auto-toggle-row { margin-top: 14px; }
+        .auto-panel { display: none; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+        .auto-panel.show { display: block; }
+        .auto-add-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .auto-add-row input, .auto-add-row select {
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 7px 10px; color: var(--text-bright); font-size: 12.5px;
+        }
+        .auto-add-row input[name="cmd"] { flex: 1; min-width: 160px; }
+        .auto-list-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+            background: var(--bg-muted); border-radius: var(--r-sm); margin-bottom: 6px; font-size: 12.5px;
+        }
+        .auto-list-item .cmd { font-weight: 700; color: var(--text-bright); font-family: monospace; }
+        .auto-list-item .interval { color: var(--text-muted); }
+        .auto-list-item .spacer { flex: 1; }
+        .auto-list-item button {
+            background: none; border: 1px solid var(--border); color: var(--text-muted);
+            border-radius: 6px; padding: 4px 9px; font-size: 11px; cursor: pointer; font-weight: 700;
+        }
+        .auto-list-item button:hover { color: var(--danger, #F87171); border-color: rgba(248,113,113,0.4); }
+        .auto-empty { color: var(--text-muted); font-size: 12.5px; padding: 8px 0; }
+
+        /* console */
+        .console-panel { display: none; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+        .console-panel.show { display: block; }
+        .console-feed {
+            height: 220px; overflow-y: auto; background: #0d0f13; border: 1px solid var(--border);
+            border-radius: var(--r-sm); padding: 10px 12px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 12px; line-height: 1.6; margin-bottom: 8px;
+        }
+        .console-feed .line { white-space: pre-wrap; word-break: break-word; color: #d4d7dd; }
+        .console-feed .line.sent { color: #8ab4f8; }
+        .console-feed .empty { color: var(--text-muted); font-style: italic; }
+        .console-input-row { display: flex; gap: 8px; }
+        .console-input-row input {
+            flex: 1; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 8px 11px; color: var(--text-bright); font-family: monospace; font-size: 12.5px;
+        }
+        .console-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+        .console-offline-note { color: var(--warning, #FBBF24); font-size: 12px; padding: 8px 0; }
+
+        .empty-note { color: var(--text-muted); font-size: 13.5px; padding: 30px 0; text-align: center; }
+
+        .toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+        .toast {
+            padding: 10px 16px; border-radius: var(--r-sm); background: var(--bg-surface);
+            border: 1px solid var(--border); font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+        }
+        .toast.success { border-color: var(--ok, #34D399); color: var(--ok, #34D399); }
+        .toast.error { border-color: var(--danger, #F87171); color: var(--danger, #F87171); }
+        .toast.info { border-color: var(--accent); color: var(--accent-light); }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>
+            {% if identity.avatar_url %}<img src="{{ identity.avatar_url }}" style="width:32px;height:32px;border-radius:50%;">{% endif %}
+            {{ identity.username }}
+        </h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users" class="active">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <!-- ── Profile header ── -->
+    <div class="profile-card">
+        {% if identity.avatar_url %}<img src="{{ identity.avatar_url }}">{% endif %}
+        <div>
+            <div class="profile-name">{{ identity.username }}</div>
+            <div class="profile-id">{{ discord_id }}</div>
+        </div>
+
+        <div class="profile-stats">
+            <div class="pstat">
+                <div class="n">{{ session_count }}</div>
+                <div class="l">Sessions</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Sessions ── -->
+    <div class="section-head">
+        <h2>🎮 Minecraft Sessions</h2>
+        <button class="btn-new" onclick="createSession()">+ New Session</button>
+    </div>
+
+    <div id="sessions-wrap">
+        {% if not sessions %}
+        <div class="empty-note">This user has no MC sessions yet. Click "New Session" to set one up for them.</div>
+        {% endif %}
+
+        {% for s in sessions %}
+        <div class="session-card" data-session-id="{{ s.session_id }}">
+            <div class="sc-top">
+                <span class="sc-label">{{ s.label }}</span>
+                {% if s.mc_username %}<span class="sc-username">{{ s.mc_username }}</span>{% endif %}
+
+                {% if not s.live_reachable %}
+                    <span class="badge unreachable">⚠️ Bot service unreachable</span>
+                {% elif s.status == 'ready' %}
+                    <span class="badge online"><span class="dot"></span> Online — {{ s.server or 'unknown server' }}</span>
+                {% elif s.status in ('connecting', 'authenticating') %}
+                    <span class="badge offline"><span class="dot"></span> Connecting…</span>
+                {% elif s.status == 'error' %}
+                    <span class="badge error"><span class="dot"></span> Error</span>
+                {% else %}
+                    <span class="badge offline"><span class="dot"></span> Offline</span>
+                {% endif %}
+
+                {% if s.linked %}
+                    <span class="badge linked">🔗 Account Linked</span>
+                {% else %}
+                    <span class="badge unlinked">⚠️ No Account Linked</span>
+                {% endif %}
+            </div>
+
+            <div class="sc-meta">
+                <div>
+                    <div class="m-label">Last / Current Server</div>
+                    <div class="m-value">{{ s.server or s.last_server or '—' }}</div>
+                </div>
+                <div>
+                    <div class="m-label">Version</div>
+                    <div class="m-value">{{ s.last_version or 'latest' }}</div>
+                </div>
+                <div>
+                    <div class="m-label">Ping</div>
+                    <div class="m-value">{{ s.ping or 0 }}ms</div>
+                </div>
+                {% if s.health is not none %}
+                <div>
+                    <div class="m-label">Health / Hunger</div>
+                    <div class="m-value">❤️ {{ s.health }} · 🍗 {{ s.hunger }}</div>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="m-label">Created</div>
+                    <div class="m-value">{{ s.created_at[:10] if s.created_at else '—' }}</div>
+                </div>
+            </div>
+
+            <div class="sc-actions">
+                {% if not s.linked %}
+                <button class="sc-btn primary" onclick="startLogin('{{ s.session_id }}')">🔑 Start Login</button>
+                {% endif %}
+                <button class="sc-btn" onclick="toggleConnectForm('{{ s.session_id }}')">🌐 Connect to Server</button>
+                <button class="sc-btn" onclick="reconnectSession('{{ s.session_id }}')">🔄 Reconnect</button>
+                <button class="sc-btn" onclick="logoutSession('{{ s.session_id }}')">⏻ Logout</button>
+                <button class="sc-btn danger" onclick="fullLogoutSession('{{ s.session_id }}')">🗑️ Full Logout (unlink)</button>
+                <button class="sc-btn danger" onclick="deleteSession('{{ s.session_id }}')">❌ Delete Session</button>
+                <button class="sc-btn" onclick="toggleAutoPanel('{{ s.session_id }}')">⏱️ Auto Commands</button>
+                <button class="sc-btn" onclick="toggleConsole('{{ s.session_id }}', {{ 'true' if s.status == 'ready' else 'false' }})">🖥️ Console</button>
+            </div>
+
+            <!-- Device-code login box, filled in by JS -->
+            <div class="login-box" id="login-box-{{ s.session_id }}">
+                <p>Send this code + link to the user, or complete it yourself if you're logging in on their behalf:</p>
+                <div class="code" id="login-code-{{ s.session_id }}">••••••••</div>
+                <a class="verify-link" id="login-url-{{ s.session_id }}" href="#" target="_blank">Open Microsoft Verification Page →</a>
+            </div>
+
+            <!-- Connect-to-server form -->
+            <form class="connect-form" id="connect-form-{{ s.session_id }}" onsubmit="return submitConnect(event, '{{ s.session_id }}')">
+                <input type="text" name="server" placeholder="play.example.net" value="{{ s.last_server or '' }}" required>
+                <select name="version">
+                    <option value="latest" {{ 'selected' if s.last_version == 'latest' else '' }}>Latest</option>
+                    <option value="1.21.1" {{ 'selected' if s.last_version == '1.21.1' else '' }}>1.21.1</option>
+                    <option value="1.20.4" {{ 'selected' if s.last_version == '1.20.4' else '' }}>1.20.4</option>
+                    <option value="1.19.4" {{ 'selected' if s.last_version == '1.19.4' else '' }}>1.19.4</option>
+                    <option value="1.18.2" {{ 'selected' if s.last_version == '1.18.2' else '' }}>1.18.2</option>
+                    <option value="1.16.5" {{ 'selected' if s.last_version == '1.16.5' else '' }}>1.16.5</option>
+                </select>
+                <button type="submit" class="sc-btn primary">Connect</button>
+            </form>
+
+            <!-- Auto Commands panel -->
+            <div class="auto-panel" id="auto-panel-{{ s.session_id }}">
+                <div class="auto-add-row">
+                    <input type="text" id="auto-cmd-{{ s.session_id }}" placeholder="/command to run">
+                    <input type="number" id="auto-val-{{ s.session_id }}" min="1" value="5" style="width:70px;">
+                    <select id="auto-unit-{{ s.session_id }}">
+                        <option value="m">Minutes</option>
+                        <option value="h">Hours</option>
+                        <option value="s">Seconds</option>
+                        <option value="d">Days</option>
+                    </select>
+                    <button class="sc-btn primary" onclick="addAutoCommand('{{ s.session_id }}')">+ Add</button>
+                </div>
+                <div id="auto-list-{{ s.session_id }}">
+                    <div class="auto-empty">Loading…</div>
+                </div>
+            </div>
+
+            <!-- Live console -->
+            <div class="console-panel" id="console-panel-{{ s.session_id }}">
+                {% if s.status == 'ready' %}
+                <div class="console-feed" id="console-feed-{{ s.session_id }}">
+                    <div class="empty">Loading recent chat…</div>
+                </div>
+                <div class="console-input-row">
+                    <input type="text" id="console-input-{{ s.session_id }}" placeholder="Type a chat message or /command…"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();sendConsole('{{ s.session_id }}');}">
+                    <button class="sc-btn primary" onclick="sendConsole('{{ s.session_id }}')">Send</button>
+                </div>
+                {% else %}
+                <div class="console-offline-note">⚠️ This session isn't currently connected to a server — console is unavailable until it's online.</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+    const DISCORD_ID = "{{ discord_id }}";
+
+    function showToast(msg, type='info') {
+        const wrap = document.getElementById('toast-wrap');
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        el.textContent = msg;
+        wrap.appendChild(el);
+        setTimeout(() => el.remove(), 4000);
+    }
+
+    async function api(path, opts) {
+        const r = await fetch(`/admin/users/${DISCORD_ID}${path}`, {
+            headers: { 'Content-Type': 'application/json' },
+            ...opts
+        });
+        return r.json();
+    }
+
+    async function createSession() {
+        const label = prompt('Optional label for this session (e.g. "Main", "Farm alt"):', '');
+        const data = await api('/mc-sessions/create', { method: 'POST', body: JSON.stringify({ label }) });
+        if (data.ok) {
+            showToast('Session created — reloading…', 'success');
+            setTimeout(() => location.reload(), 600);
+        } else {
+            showToast(data.error || 'Failed to create session', 'error');
+        }
+    }
+
+    async function deleteSession(sid) {
+        if (!confirm('Delete this session entirely? This wipes the saved login too.')) return;
+        const data = await api(`/mc-sessions/${sid}/delete`, { method: 'POST' });
+        if (data.ok) {
+            showToast('Session deleted.', 'success');
+            document.querySelector(`.session-card[data-session-id="${sid}"]`)?.remove();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    }
+
+    let loginPollTimers = {};
+
+    async function startLogin(sid) {
+        const data = await api(`/mc-start-login/${sid}`, { method: 'POST' });
+        if (!data.ok) {
+            showToast(data.error || 'Failed to start login', 'error');
+            return;
+        }
+        showToast('Login started — waiting for device code…', 'info');
+        const box = document.getElementById(`login-box-${sid}`);
+        box.classList.add('show');
+
+        clearInterval(loginPollTimers[sid]);
+        loginPollTimers[sid] = setInterval(async () => {
+            const status = await api(`/mc-status/${sid}`);
+            if (status.code) {
+                document.getElementById(`login-code-${sid}`).textContent = status.code;
+            }
+            if (status.url) {
+                const link = document.getElementById(`login-url-${sid}`);
+                link.href = status.url;
+            }
+            if (status.linked || (status.status && status.status !== 'error' && !status.requires_auth && status.mcUsername)) {
+                clearInterval(loginPollTimers[sid]);
+                showToast('Account linked!', 'success');
+                setTimeout(() => location.reload(), 800);
+            }
+            if (status.status === 'error') {
+                clearInterval(loginPollTimers[sid]);
+                showToast(status.error || 'Login failed', 'error');
+            }
+        }, 3000);
+    }
+
+    async function reconnectSession(sid) {
+        const data = await api(`/mc-reconnect/${sid}`, { method: 'POST' });
+        showToast(data.ok !== false ? 'Reconnecting…' : (data.error || 'Reconnect failed'), data.ok !== false ? 'success' : 'error');
+        setTimeout(() => location.reload(), 1200);
+    }
+
+    async function logoutSession(sid) {
+        const data = await api(`/mc-logout/${sid}`, { method: 'POST' });
+        showToast(data.ok !== false ? 'Logged out (login kept).' : (data.error || 'Failed'), data.ok !== false ? 'success' : 'error');
+        setTimeout(() => location.reload(), 1000);
+    }
+
+    async function fullLogoutSession(sid) {
+        if (!confirm('This wipes the saved Microsoft login — the user will need to fully sign in again. Continue?')) return;
+        const data = await api(`/mc-full-logout/${sid}`, { method: 'POST' });
+        showToast(data.ok !== false ? 'Fully logged out.' : (data.error || 'Failed'), data.ok !== false ? 'success' : 'error');
+        setTimeout(() => location.reload(), 1000);
+    }
+
+    function toggleConnectForm(sid) {
+        document.getElementById(`connect-form-${sid}`).classList.toggle('show');
+    }
+
+    async function submitConnect(evt, sid) {
+        evt.preventDefault();
+        const form = evt.target;
+        const server = form.server.value.trim();
+        const version = form.version.value;
+        if (!server) return false;
+        const data = await api(`/mc-connect/${sid}`, { method: 'POST', body: JSON.stringify({ server, version }) });
+        if (data.requires_auth) {
+            showToast('This server requires Discord auth-gate approval first.', 'info');
+        } else if (data.ok || data.status === 'ready' || data.status === 'connecting') {
+            showToast('Connecting…', 'success');
+        } else {
+            showToast(data.error || 'Connect failed', 'error');
+        }
+        setTimeout(() => location.reload(), 1200);
+        return false;
+    }
+
+    const autoPanelsLoaded = new Set();
+
+    function toggleAutoPanel(sid) {
+        const panel = document.getElementById(`auto-panel-${sid}`);
+        panel.classList.toggle('show');
+        if (panel.classList.contains('show') && !autoPanelsLoaded.has(sid)) {
+            autoPanelsLoaded.add(sid);
+            loadAutoCommands(sid);
+        }
+    }
+
+    function formatInterval(ms) {
+        if (!ms) return '';
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return `${s}s`;
+        const m = Math.floor(s / 60);
+        if (m < 60) return `${m}m`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h`;
+        return `${Math.floor(h / 24)}d`;
+    }
+
+    async function loadAutoCommands(sid) {
+        const list = document.getElementById(`auto-list-${sid}`);
+        list.innerHTML = '<div class="auto-empty">Loading…</div>';
+        const data = await api(`/mc-schedule/${sid}`);
+        const commands = data.commands || [];
+        if (!commands.length) {
+            list.innerHTML = '<div class="auto-empty">No auto commands scheduled.</div>';
+            return;
+        }
+        list.innerHTML = commands.map(c => `
+            <div class="auto-list-item">
+                <span class="cmd">${escapeHtml(c.command)}</span>
+                <span class="interval">every ${formatInterval(c.interval)}</span>
+                <span class="spacer"></span>
+                ${c.enabled ? '' : '<span style="color:var(--text-muted);">(disabled)</span>'}
+                ${c.enabled ? `<button onclick="disableAutoCommand('${sid}', '${escapeAttr(c.command)}')">Disable</button>` : ''}
+                <button onclick="deleteAutoCommand('${sid}', '${escapeAttr(c.command)}')">Delete</button>
+            </div>
+        `).join('');
+    }
+
+    async function addAutoCommand(sid) {
+        const cmd = document.getElementById(`auto-cmd-${sid}`).value.trim();
+        const val = parseInt(document.getElementById(`auto-val-${sid}`).value);
+        const unit = document.getElementById(`auto-unit-${sid}`).value;
+        if (!cmd || isNaN(val) || val < 1) return showToast('Enter a command and interval', 'error');
+        const mult = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+        const interval = val * mult[unit];
+        if (interval < 60000) return showToast('Interval must be at least 1 minute', 'error');
+
+        const data = await api(`/mc-schedule/${sid}`, { method: 'POST', body: JSON.stringify({ command: cmd, interval }) });
+        if (data.ok !== false) {
+            document.getElementById(`auto-cmd-${sid}`).value = '';
+            showToast('Auto command added.', 'success');
+            loadAutoCommands(sid);
+        } else {
+            showToast(data.error || 'Failed to add', 'error');
+        }
+    }
+
+    async function disableAutoCommand(sid, command) {
+        await api(`/mc-schedule/disable/${sid}`, { method: 'POST', body: JSON.stringify({ command }) });
+        showToast('Command disabled.', 'info');
+        loadAutoCommands(sid);
+    }
+
+    async function deleteAutoCommand(sid, command) {
+        await api(`/mc-schedule/delete/${sid}`, { method: 'POST', body: JSON.stringify({ command }) });
+        showToast('Command deleted.', 'success');
+        loadAutoCommands(sid);
+    }
+
+    // ── Live console ────────────────────────────────────────────────────
+    const consolePolling = {};   // sid -> interval timer
+    const consoleAfter = {};     // sid -> last seen message id
+
+    function toggleConsole(sid, isOnline) {
+        const panel = document.getElementById(`console-panel-${sid}`);
+        const opening = !panel.classList.contains('show');
+        panel.classList.toggle('show');
+
+        if (!isOnline) return; // nothing to poll, offline note is already shown
+
+        if (opening) {
+            consoleAfter[sid] = 0;
+            pollConsole(sid);
+            consolePolling[sid] = setInterval(() => pollConsole(sid), 2000);
+        } else {
+            clearInterval(consolePolling[sid]);
+        }
+    }
+
+    async function pollConsole(sid) {
+        const feed = document.getElementById(`console-feed-${sid}`);
+        if (!feed) return;
+        try {
+            const data = await api(`/mc-chat/${sid}?after=${consoleAfter[sid] || 0}`);
+            const messages = data.messages || [];
+            if (!messages.length && consoleAfter[sid] === 0 && feed.querySelector('.empty')) {
+                feed.innerHTML = '<div class="empty">No chat yet — say something below.</div>';
+                return;
+            }
+            const wasAtBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+            messages.forEach(m => {
+                if (feed.querySelector('.empty')) feed.innerHTML = '';
+                const div = document.createElement('div');
+                div.className = 'line' + (m.type === 'sent' ? ' sent' : '');
+                div.textContent = m.text;
+                feed.appendChild(div);
+                consoleAfter[sid] = Math.max(consoleAfter[sid] || 0, m.id);
+            });
+            if (wasAtBottom) feed.scrollTop = feed.scrollHeight;
+        } catch (e) {
+            // Silent — a transient poll failure isn't worth a toast every 2s.
+        }
+    }
+
+    async function sendConsole(sid) {
+        const input = document.getElementById(`console-input-${sid}`);
+        const message = input.value.trim();
+        if (!message) return;
+        input.value = '';
+        const data = await api(`/mc-chat/${sid}`, { method: 'POST', body: JSON.stringify({ message }) });
+        if (data.ok === false) {
+            showToast(data.error || 'Failed to send', 'error');
+        } else {
+            pollConsole(sid);
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    function escapeAttr(text) {
+        return String(text).replace(/'/g, "\\'");
+    }
+</script>
+</body>
+</html>

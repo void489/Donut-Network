@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — {{ guild.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a { text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px; border-radius: var(--r-sm); }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .tabs a { text-decoration: none; font-size: 13.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-sm);
+                  color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .tabs a.active { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+        .tabs a:hover { border-color: rgba(88,101,242,0.4); }
+
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+        @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+        .stat { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 18px; }
+        .stat .v { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .stat .k { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+        .stat.green .v { color: #4ade80; } .stat.red .v { color: #f87171; } .stat.grey .v { color: var(--text-main); }
+
+        .pills { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .pills a { text-decoration: none; font-size: 12.5px; font-weight: 700; padding: 6px 14px; border-radius: 99px;
+                   color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .pills a.on { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+
+        .pl-wrap { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow-x: auto; }
+        table.pl { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.pl th { text-align: left; padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+                      color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+        table.pl td { padding: 12px 14px; border-bottom: 1px solid var(--border-soft); color: var(--text-main); vertical-align: top; }
+        table.pl tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+        .b-paid { background: rgba(34,197,94,.15); color: #4ade80; }
+        .b-not_detected, .b-error { background: rgba(239,68,68,.15); color: #f87171; }
+        .b-cancelled, .b-interrupted { background: rgba(90,96,112,.25); color: #9da3af; }
+        .b-tracking { background: rgba(245,158,11,.15); color: #fbbf24; }
+        .amt { font-weight: 800; color: var(--text-bright); white-space: nowrap; }
+        .msg { font-family: monospace; font-size: 11.5px; color: var(--text-muted); max-width: 220px; word-break: break-word; }
+        table.pl th.act, table.pl td.act { position: sticky; right: 0; background: var(--bg-surface); z-index: 2;
+                      box-shadow: -8px 0 12px -8px rgba(0,0,0,.45); }
+        .del { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.35); border-radius: var(--r-sm);
+               padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .del:hover { background: rgba(239,68,68,.25); }
+        .flash { padding: 12px 16px; border-radius: var(--r-sm); margin-bottom: 16px; font-size: 13px; font-weight: 700; }
+        .flash.ok { background: rgba(34,197,94,.15); color: #4ade80; } .flash.bad { background: rgba(239,68,68,.15); color: #f87171; }
+        .empty { padding: 40px; text-align: center; color: var(--text-muted); }
+
+        .stats.s5 { grid-template-columns: repeat(5, 1fr); }
+        @media (max-width: 1000px) { .stats.s5 { grid-template-columns: repeat(2, 1fr); } }
+        .stat .sub { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+        .stat.blue .v { color: #8ea1ff; } .stat.amber .v { color: #fbbf24; }
+        .sec-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 800; margin: 26px 0 12px; }
+        .inner-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+        .inner-tabs button { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 15px; border-radius: 99px; cursor: pointer;
+                  color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .inner-tabs button.on { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+        .inner-tabs button .n { opacity: .65; margin-left: 5px; font-weight: 600; }
+        .pane { display: none; } .pane.on { display: block; }
+        .funnel { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+        @media (max-width: 1100px) { .funnel { grid-template-columns: repeat(2, 1fr); } }
+        .fstep { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; cursor: pointer; }
+        .fstep:hover { border-color: rgba(88,101,242,0.4); }
+        .fstep .v { font-size: 22px; font-weight: 800; color: var(--text-bright); }
+        .fstep .k { font-size: 11.5px; color: var(--text-muted); font-weight: 700; margin-top: 3px; }
+        .card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px 20px; }
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+        .kv { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border-soft); font-size: 13px; }
+        .kv:last-child { border-bottom: none; } .kv b { color: var(--text-bright); } .kv span { color: var(--text-muted); }
+        .chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+        .chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+        .chart .bar { width: 100%; background: rgba(88,101,242,.55); border-radius: 4px 4px 0 0; min-height: 0; }
+        .chart .lbl { font-size: 10px; color: var(--text-muted); margin-top: 5px; white-space: nowrap; }
+        .b-grey { background: rgba(90,96,112,.25); color: #9da3af; } .b-amber { background: rgba(245,158,11,.15); color: #fbbf24; }
+        .b-blue { background: rgba(88,101,242,.18); color: #8ea1ff; } .b-green { background: rgba(34,197,94,.15); color: #4ade80; }
+        .muted { color: var(--text-muted); } .good { color: #4ade80; font-weight: 800; } .bad { color: #f87171; font-weight: 800; }
+        td a { color: var(--accent-light); text-decoration: none; font-weight: 700; } td a:hover { text-decoration: underline; }
+        .note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; line-height: 1.5; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>📈 {{ guild.name }}</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers" class="active">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <div class="tabs">
+        <a href="/admin/bot-servers/{{ guild.id }}/manage">⚙️ Setup &amp; Builds</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/payments">💳 Payment Logs</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/dashboard" class="active">📈 Dashboard</a>
+    </div>
+
+    {% if error %}<div class="flash bad">Couldn't load the dashboard: {{ error }}</div>{% endif %}
+    {% if data %}
+    {% set d = data.d %}
+    {% set g = guild.id %}
+
+    <div class="inner-tabs" id="tabs">
+        <button data-tab="overview" class="on">📊 Overview</button>
+        <button data-tab="open">🎫 Open tickets<span class="n">{{ data.open_total }}</span></button>
+        <button data-tab="left">🧾 Left to pay<span class="n">{{ d.left_n }}</span></button>
+        <button data-tab="done">🏁 Completed builds<span class="n">{{ data.completed|length }}</span></button>
+        <button data-tab="refunds">↩️ Refunds<span class="n">{{ d.refunded_n }}</span></button>
+        <button data-tab="builders">🛠️ Builders<span class="n">{{ data.builders|length }}</span></button>
+        <button data-tab="owner">👑 Owner</button>
+        <button data-tab="payouts">💸 Payouts made<span class="n">{{ d.out_n }}</span></button>
+    </div>
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <div class="pane on" id="pane-overview">
+        <div class="stats s5">
+            <div class="stat green"><div class="v">{{ d.rec|money }}</div><div class="k">💰 Payments received</div><div class="sub">{{ d.rec_n }} payment{{ '' if d.rec_n == 1 else 's' }} (net of refunds)</div></div>
+            <div class="stat blue"><div class="v">{{ d.fee|money }}</div><div class="k">🏦 Our fee (finished builds)</div><div class="sub">{% if d.kept %}incl. {{ d.kept|money }} kept from {{ d.kept_n }} refund{{ '' if d.kept_n == 1 else 's' }}{% else %}fee % is {{ data.cfg.fee_percent }}%{% endif %}</div></div>
+            <div class="stat green"><div class="v">{{ data.server_keeps|money }}</div><div class="k">🏠 Server keeps</div><div class="sub">{% if data.owner_on %}fee minus owner's share{% else %}no owner set up{% endif %}</div></div>
+            <div class="stat grey"><div class="v">{{ d.out|money }}</div><div class="k">💸 Paid to builders</div><div class="sub">{{ d.out_n }} payout{{ '' if d.out_n == 1 else 's' }}</div></div>
+            <div class="stat amber"><div class="v">{{ d.left_total|money }}</div><div class="k">🧾 Owed to builders</div><div class="sub">{{ d.left_n }} build{{ '' if d.left_n == 1 else 's' }} left to pay</div></div>
+        </div>
+        <div class="stats s5">
+            <div class="stat blue"><div class="v">{{ d.progress_paid|money }}</div><div class="k">🔨 Paid on in-progress builds</div><div class="sub">of {{ d.progress_price|money }} total · {{ d.progress_n }} build{{ '' if d.progress_n == 1 else 's' }}</div></div>
+            <div class="stat amber"><div class="v">{{ d.claim_paid|money }}</div><div class="k">📥 Paid, waiting for a builder</div><div class="sub">{{ d.claim_n }} ticket{{ '' if d.claim_n == 1 else 's' }}</div></div>
+            <div class="stat red"><div class="v">{{ d.refunded_total|money }}</div><div class="k">↩️ Refunded</div><div class="sub">{{ d.refunded_n }} build{{ '' if d.refunded_n == 1 else 's' }}</div></div>
+            <div class="stat green"><div class="v">{{ d.kept|money }}</div><div class="k">🏦 Kept from refunds</div><div class="sub">counts as server fee</div></div>
+            <div class="stat {{ 'amber' if d.owner_left else 'grey' }}"><div class="v">{{ d.owner_left|money }}</div><div class="k">👑 Left to pay to owner</div><div class="sub">earned {{ d.owner_earned|money }} · paid {{ d.owner_paid|money }}</div></div>
+        </div>
+
+        <div class="sec-title">Pipeline: where every open ticket is right now</div>
+        <div class="funnel">
+            {% for f in data.funnel %}
+            <div class="fstep" onclick="openStage('{{ f.key }}')"><div class="v">{{ f.n }}</div><div class="k">{{ f.label }}</div></div>
+            {% endfor %}
+        </div>
+
+        <div class="split" style="margin-top:22px">
+            <div>
+                <div class="sec-title" style="margin-top:0">Money in · last 14 days</div>
+                <div class="card">
+                    <div class="chart">
+                        {% for c in data.chart %}
+                        <div class="col" title="{{ c.day }}: {{ c.amount|money }}"><div class="bar" style="height: {{ c.pct }}%"></div><div class="lbl">{{ c.day[3:] }}</div></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="sec-title" style="margin-top:0">How the money splits</div>
+                <div class="card">
+                    <div class="kv"><span>Customers paid (all time, net)</span><b>{{ d.rec|money }}</b></div>
+                    <div class="kv"><span>Builders' cut on finished builds</span><b>{{ (d.out + d.left_total)|money }}</b></div>
+                    <div class="kv"><span>Our fee</span><b>{{ d.fee|money }}</b></div>
+                    {% if data.owner_on %}
+                    <div class="kv"><span>↳ Owner's share ({{ data.cfg.owner_fee_percent }}% of price)</span><b>{{ d.owner_earned|money }}</b></div>
+                    <div class="kv"><span>↳ Server keeps</span><b>{{ data.server_keeps|money }}</b></div>
+                    {% endif %}
+                    <div class="kv"><span>Still with in-progress builds</span><b>{{ d.progress_paid|money }}</b></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== OPEN TICKETS ===================== -->
+    <div class="pane" id="pane-open">
+        <p class="note">Every open ticket and the stage it's in. Click a stage to filter. <b>Missing</b> is what the customer still has to pay.</p>
+        <div class="pills" id="stagePills">
+            <a href="#" class="on" data-stage="">All ({{ data.open_total }})</a>
+            {% for f in data.funnel %}<a href="#" data-stage="{{ f.key }}">{{ f.label }} ({{ f.n }})</a>{% endfor %}
+        </div>
+        <div class="pl-wrap">
+            {% if data.open_rows %}
+            <table class="pl" id="openTable">
+                <tr><th>Stage</th><th>Build</th><th>Customer</th><th>IGN</th><th>Builder</th><th>Price</th><th>Paid</th><th>Missing</th><th>Opened</th><th>Age</th><th>Ticket</th></tr>
+                {% for r in data.open_rows %}
+                <tr data-stage="{{ r.stage }}">
+                    <td><span class="badge b-{{ r.color }}">{{ r.stage_label }}</span>{% if r.note %}<div class="muted" style="font-size:11.5px;margin-top:4px">{{ r.note }}</div>{% endif %}</td>
+                    <td>🧱 {{ r.build }}{% if r.kind != 'build' %} <span class="muted">({{ r.kind }})</span>{% endif %}</td>
+                    <td><b>{{ r.customer }}</b></td>
+                    <td>{{ r.ign }}</td>
+                    <td>{{ r.builder }}</td>
+                    <td class="amt">{{ r.price|money if r.price else '—' }}</td>
+                    <td class="amt {{ 'good' if r.price and r.paid >= r.price else '' }}">{{ r.paid|money }}</td>
+                    <td class="amt {{ 'bad' if r.missing else '' }}">{{ r.missing|money if r.missing else '—' }}</td>
+                    <td>{{ r.opened }}</td>
+                    <td>{{ r.age }}</td>
+                    <td><a href="https://discord.com/channels/{{ g }}/{{ r.channel_id }}" target="_blank" rel="noopener">#{{ r.channel }}</a></td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">No open tickets.</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- ===================== LEFT TO PAY ===================== -->
+    <div class="pane" id="pane-left">
+        <p class="note">Finished builds where the builder hasn't been paid yet. Total owed: <b>{{ d.left_total|money }}</b>.</p>
+        <div class="pl-wrap">
+            {% if data.left_rows %}
+            <table class="pl">
+                <tr><th>Builder</th><th>Build</th><th>Customer</th><th>Amount owed</th><th>Status</th><th>Finished</th><th>Waiting</th><th>Ticket</th></tr>
+                {% for r in data.left_rows %}
+                <tr><td><b>{{ r.builder }}</b></td><td>🧱 {{ r.build }}</td><td>{{ r.customer }}</td><td class="amt">{{ r.amount|money }}</td>
+                    <td>{{ r.status }}</td><td>{{ r.finished }}</td><td>{{ r.age }}</td>
+                    <td><a href="https://discord.com/channels/{{ g }}/{{ r.channel_id }}" target="_blank" rel="noopener">open</a></td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">Every finished build has been paid out. ✅</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- ===================== COMPLETED ===================== -->
+    <div class="pane" id="pane-done">
+        <p class="note">Every finished build and how its price was split: builder's cut, our fee, and the owner's share of that fee (only counted once the builder is paid).</p>
+        <div class="pl-wrap">
+            {% if data.completed %}
+            <table class="pl">
+                <tr><th>Finished</th><th>Build</th><th>Builder</th><th>Price</th><th>Builder cut</th><th>Our fee</th><th>Owner share</th><th>Rating</th><th>Builder paid</th></tr>
+                {% for r in data.completed %}
+                <tr><td>{{ r.when }}</td><td>🧱 {{ r.build }}</td><td><b>{{ r.builder }}</b></td><td class="amt">{{ r.worth|money }}</td>
+                    <td class="amt">{{ r.builder_cut|money }}</td><td class="amt">{{ r.fee|money }}</td>
+                    <td class="amt">{{ r.owner_share|money if r.owner_share else '—' }}</td>
+                    <td>{{ ('⭐ ' ~ r.rating) if r.rating else '—' }}</td>
+                    <td>{% if r.paid %}<span class="badge b-paid">✅ Paid</span>{% else %}<span class="badge b-amber">⏳ Owed</span>{% endif %}</td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">No finished builds yet.</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- ===================== REFUNDS ===================== -->
+    <div class="pane" id="pane-refunds">
+        <p class="note">Refunded builds. Money we <b>kept</b> from a partial refund counts as server fee, and the owner gets his share of it (owner % ÷ fee %).</p>
+        <div class="pl-wrap">
+            {% if data.refunds %}
+            <table class="pl">
+                <tr><th>When</th><th>Build</th><th>Customer</th><th>Refunded</th><th>%</th><th>Kept (fee)</th><th>Owner's share of kept</th></tr>
+                {% for r in data.refunds %}
+                <tr><td>{{ r.when }}</td><td>🧱 {{ r.build }}</td><td><b>{{ r.customer }}</b></td><td class="amt">{{ r.refunded|money }}</td>
+                    <td>{{ r.percent }}%</td><td class="amt">{{ r.kept|money if r.kept else '—' }}</td><td class="amt">{{ r.owner_share|money if r.owner_share else '—' }}</td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">No refunds.</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- ===================== BUILDERS ===================== -->
+    <div class="pane" id="pane-builders">
+        <div class="pl-wrap">
+            {% if data.builders %}
+            <table class="pl">
+                <tr><th>Builder</th><th>Finished</th><th>In progress</th><th>Total build value</th><th>Paid to builder</th><th>Still owed</th><th>Avg rating</th></tr>
+                {% for b in data.builders %}
+                <tr><td><b>{{ b.name }}</b></td><td>{{ b.done }}</td><td>{{ b.active }}</td><td class="amt">{{ b.worth|money }}</td>
+                    <td class="amt good">{{ b.paid|money }}</td><td class="amt {{ 'bad' if b.owed else '' }}">{{ b.owed|money if b.owed else '—' }}</td>
+                    <td>{{ ('⭐ ' ~ b.rating ~ ' (' ~ b.ratings_n ~ ')') if b.rating else '—' }}</td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">No builders yet.</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- ===================== OWNER ===================== -->
+    <div class="pane" id="pane-owner">
+        {% if data.owner_on %}
+        <div class="stats">
+            <div class="stat blue"><div class="v">{{ d.owner_earned|money }}</div><div class="k">Earned</div></div>
+            <div class="stat green"><div class="v">{{ d.owner_paid|money }}</div><div class="k">Paid to owner</div></div>
+            <div class="stat amber"><div class="v">{{ d.owner_left|money }}</div><div class="k">Left to pay</div></div>
+            <div class="stat grey"><div class="v">{{ data.cfg.owner_fee_percent }}%</div><div class="k">of price · IGN {{ data.cfg.owner_ign }}</div></div>
+        </div>
+        <p class="note">Owner gets {{ data.cfg.owner_fee_percent }}% of each build's price (out of our {{ data.cfg.fee_percent }}% fee), counted once the builder is paid, plus his share of money we kept from partial refunds. Settle it with the <b>Settle Owner Amount</b> button on the Discord recap panel.</p>
+        <div class="pl-wrap">
+            {% if data.owner_payouts %}
+            <table class="pl">
+                <tr><th>When</th><th>Owner IGN</th><th>Sent by</th><th>Amount</th><th>How</th></tr>
+                {% for p in data.owner_payouts %}
+                <tr><td>{{ p.when }}</td><td>{{ p.ign }}</td><td>{{ p.sender }}</td><td class="amt">{{ p.amount|money }}</td><td>{{ '⚠️ forced' if p.forced else '✅ tracked in-game' }}</td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">Nothing paid to the owner yet.</div>{% endif %}
+        </div>
+        {% else %}
+        <div class="card">The owner isn't set up yet. Add the owner IGN and fee % in <a href="/admin/bot-servers/{{ g }}/manage" style="color:var(--accent-light)">Setup &amp; Builds</a> (Owner section).</div>
+        {% endif %}
+    </div>
+
+    <!-- ===================== PAYOUTS ===================== -->
+    <div class="pane" id="pane-payouts">
+        <p class="note">Confirmed payouts to builders (newest first).</p>
+        <div class="pl-wrap">
+            {% if data.builder_payouts %}
+            <table class="pl">
+                <tr><th>When</th><th>Builder</th><th>Builder IGN</th><th>Sent by</th><th>Build</th><th>Amount</th><th>How</th></tr>
+                {% for p in data.builder_payouts %}
+                <tr><td>{{ p.when }}</td><td><b>{{ p.builder }}</b></td><td>{{ p.ign }}</td><td>{{ p.sender }}</td><td>🧱 {{ p.build }}</td>
+                    <td class="amt">{{ p.amount|money }}</td><td>{{ '⚠️ forced' if p.forced else '✅ tracked in-game' }}</td></tr>
+                {% endfor %}
+            </table>
+            {% else %}<div class="empty">No builder payouts yet.</div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    var panes = document.querySelectorAll('.pane'), btns = document.querySelectorAll('#tabs button');
+    function show(tab) {
+        if (!document.getElementById('pane-' + tab)) tab = 'overview';
+        panes.forEach(function (p) { p.classList.toggle('on', p.id === 'pane-' + tab); });
+        btns.forEach(function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
+        history.replaceState(null, '', '#' + tab);
+    }
+    btns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
+    function filter(stage) {
+        document.querySelectorAll('#stagePills a').forEach(function (a) { a.classList.toggle('on', a.dataset.stage === stage); });
+        document.querySelectorAll('#openTable tr[data-stage]').forEach(function (r) {
+            r.style.display = (!stage || r.dataset.stage === stage) ? '' : 'none';
+        });
+    }
+    document.querySelectorAll('#stagePills a').forEach(function (a) {
+        a.addEventListener('click', function (e) { e.preventDefault(); filter(a.dataset.stage); });
+    });
+    window.openStage = function (stage) { show('open'); filter(stage); };
+    show((location.hash || '#overview').slice(1));
+})();
+</script>
+</body>
+</html>

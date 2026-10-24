@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .stat-card {
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+            padding: 20px;
+        }
+        .stat-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; margin-bottom: 8px; }
+        .stat-card .value { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .stat-card .value.ok { color: #4ade80; }
+        .stat-card .value.err { color: #f87171; }
+
+        .section-title { font-size: 15px; font-weight: 700; color: var(--text-bright); margin: 30px 0 14px; }
+        .plan-row-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+        .toggle-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px; }
+        .toggle-card label.row { display: flex; align-items: center; gap: 12px; cursor: pointer; font-weight: 700; color: var(--text-bright); }
+        .toggle-card input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+        .toggle-card p { margin: 8px 0 14px 30px; font-size: 12.5px; color: var(--text-muted); }
+        .toggle-card button { margin-left: 30px; background: var(--accent); color: #fff; border: 0; padding: 9px 16px; border-radius: var(--r-sm); font-weight: 700; font-size: 13px; cursor: pointer; }
+        .toggle-msg { font-size: 12.5px; margin: 10px 0 0 30px; color: #4ade80; }
+        .toggle-msg.err { color: #f87171; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+    <div class="admin-wrap">
+        <div class="admin-top">
+            <h1><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--accent);box-shadow:0 0 0 4px var(--accent-tint);margin-right:10px;"></span>Admin Panel</h1>
+            <a href="/admin/logout" class="logout">🚪 Log Out</a>
+        </div>
+
+        <div class="admin-nav">
+            <a href="/admin" class="active">📊 Overview</a>
+            <a href="/admin/users">👤 My Sessions</a>
+            <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+            <a href="/admin/bot-servers">🌍 Bot Servers</a>
+            <a href="/admin/verified-igns">✅ Verified IGNs</a>
+            <a href="/admin/stats-channels">📍 Stats Channels</a>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="label">Bot Status</div>
+                <div class="value {{ 'ok' if bot_online else 'err' }}">{{ 'Online' if bot_online else 'Offline' }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Servers</div>
+                <a href="/admin/bot-servers" style="text-decoration:none;"><div class="value">{{ guild_count }}</div></a>
+            </div>
+        </div>
+
+        <div class="section-title">AI Settings</div>
+        <form method="POST" action="/admin/owner-treatment" class="toggle-card">
+            <label class="row">
+                <input type="checkbox" name="owner_treatment" {{ 'checked' if owner_treatment else '' }}>
+                Owner special treatment
+            </label>
+            <p>When ticked, the AI talks to the bot owner with extra warmth and respect ("Sir"). Untick it and the owner gets the same normal (roasting) tone as everyone else.</p>
+            <button type="submit">Save</button>
+            {% if owner_saved %}<div class="toggle-msg">Saved.</div>{% endif %}
+            {% if owner_err %}<div class="toggle-msg err">Database unavailable - not saved.</div>{% endif %}
+        </form>
+
+        <div class="section-title">Users</div>
+        <div class="toggle-card">
+            <div style="font-weight:700;color:var(--text-bright);">Only you ({{ owner_id }}) should exist</div>
+            <p style="margin-left:0;">
+                {% if others.users or others.sessions %}
+                    Found data from <b>{{ others.users }}</b> other user(s) and <b>{{ others.sessions }}</b> other MC session(s).
+                    The button deletes their sessions (logged out first), auto commands, saved logins and settings. Your sessions and the stats worker account are kept. This can't be undone.
+                {% else %}
+                    No data from any other users. Nothing to remove.
+                {% endif %}
+            </p>
+            <form method="POST" action="/admin/purge-other-users"
+                  onsubmit="return confirm('Delete ALL data from every user except you? This cannot be undone.');">
+                <button type="submit" style="margin-left:0;background:var(--danger-tint);border:1px solid rgba(239,68,68,0.25);color:#f87171;" {{ '' if (others.users or others.sessions) else 'disabled' }}>Remove all other users</button>
+            </form>
+            {% if purged and purged not in ('err','dberr') %}<div class="toggle-msg" style="margin-left:0;">Done: removed {{ purged }} other session(s).</div>{% endif %}
+            {% if purged in ('err','dberr') %}<div class="toggle-msg err" style="margin-left:0;">Something went wrong, check the logs.</div>{% endif %}
+        </div>
+    </div>
+</body>
+</html>

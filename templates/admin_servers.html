@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth-Gate Servers — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .saved-banner {
+            background: var(--success-tint); border: 1px solid rgba(34,197,94,0.3); color: #4ade80;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+        .error-banner {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.3); color: #f87171;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+
+        .blurb {
+            color: var(--text-muted); font-size: 13px; line-height: 1.7; margin-bottom: 24px;
+        }
+        .blurb code { background: var(--bg-muted); padding: 2px 6px; border-radius: 5px; font-size: 12px; }
+
+        .add-form {
+            display: flex; gap: 10px; margin-bottom: 24px;
+        }
+        .add-form input {
+            flex: 1; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+            padding: 11px 13px; color: var(--text-bright); font-family: var(--font-body); font-size: 13.5px; outline: none;
+        }
+        .add-form input:focus { border-color: var(--border-focus); }
+        .add-form button {
+            background: var(--accent); color: #fff; border: none; border-radius: var(--r-sm);
+            padding: 0 20px; font-weight: 700; font-size: 13.5px; cursor: pointer; font-family: inherit;
+        }
+        .add-form button:hover { background: var(--accent-mid); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.05em; color: var(--text-muted); }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        td.domain { font-family: monospace; font-size: 13px; color: var(--text-bright); }
+        .del-btn {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.25); color: #f87171;
+            border-radius: var(--r-sm); padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+            font-family: inherit;
+        }
+        .del-btn:hover { background: rgba(239,68,68,0.2); }
+        .empty-note { color: var(--text-muted); font-size: 13.5px; padding: 30px 0; text-align: center; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>🌐 Auth-Gate Servers</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers" class="active">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <p class="blurb">
+        Some servers kick new connections and ask the player to authorize via a Discord bot DM before letting them
+        in (DonutSMP does this). The MC bot only shows the "Discord authorization needed" flow for servers listed
+        below — everywhere else, a kick is treated as a normal disconnect. Add a server's domain here (e.g.
+        <code>donutsmp.net</code>) to enable that flow for it.
+    </p>
+
+    {% if saved %}<div class="saved-banner">✅ Server list updated.</div>{% endif %}
+    {% if error %}<div class="error-banner">⚠️ Could not save changes.</div>{% endif %}
+
+    <form class="add-form" method="POST">
+        <input type="text" name="domain" placeholder="e.g. donutsmp.net" required>
+        <button type="submit">+ Add Server</button>
+    </form>
+
+    {% if servers %}
+    <table>
+        <thead>
+            <tr>
+                <th>Domain</th>
+                <th style="text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in servers %}
+            <tr>
+                <td class="domain">{{ s.domain }}</td>
+                <td style="text-align:right;">
+                    <form method="POST" action="/admin/servers/{{ s._id }}/delete" style="display:inline;" onsubmit="return confirm('Remove {{ s.domain }} from the auth-gate list?');">
+                        <button type="submit" class="del-btn">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-note">No servers configured. The Discord-authorization flow won't trigger for anyone until you add one.</div>
+    {% endif %}
+</div>
+</body>
+</html>

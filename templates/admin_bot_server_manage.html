@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage {{ guild.name }} — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px; border-radius: var(--r-sm);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .tabs a { text-decoration: none; font-size: 13.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-sm);
+                  color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border); }
+        .tabs a.active { background: var(--accent-tint); color: var(--accent-light); border-color: rgba(88,101,242,0.5); }
+        .tabs a:hover { border-color: rgba(88,101,242,0.4); }
+        .banner { padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+        .banner.ok  { background: var(--success-tint); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; }
+        .banner.err { background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; align-items: start; }
+        @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+        .mbox { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 24px; }
+        .mbox h2 { font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+        .mbox .sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5; }
+        .lbl { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin: 14px 0 6px; }
+        .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; font-style: italic; }
+        select[multiple] { min-height: 110px; background-image: none; padding-right: 13px; }
+        input[type=file] { width: 100%; color: var(--text-main); font-size: 13px; }
+
+        .btn { border-radius: var(--r-sm); padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 18px; }
+        .btn-ghost { background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border); }
+        .btn-xs { padding: 5px 11px; font-size: 12px; margin-top: 0; }
+        .btn-del { background: transparent; color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+
+        .bcard { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 12px; }
+        .bcard .hd { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; }
+        .chips { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+        .chip { background: var(--bg-muted); border:1px solid var(--border); border-radius: 999px; padding:3px 10px; font-size:12px; color: var(--text-main); }
+        .ent { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--border); font-size:13px; }
+        .ent .mt { font-size:12px; color: var(--text-muted); }
+        .build { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+        .build .nm { font-weight: 700; color: var(--text-bright); font-size: 14px; }
+        .build .mt { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+        .build .mt a { color: var(--accent-light); text-decoration: none; }
+        .build .act { display: flex; gap: 6px; flex-shrink: 0; }
+        .empty { color: var(--text-muted); font-size: 13px; padding: 10px 0; }
+        code { background: rgba(0,0,0,.3); padding: 1px 5px; border-radius: 3px; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>⚙️ {{ guild.name }}</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers" class="active">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    <div class="tabs">
+        <a href="/admin/bot-servers/{{ guild.id }}/manage" class="active">⚙️ Setup &amp; Builds</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/payments">💳 Payment Logs</a>
+        <a href="/admin/bot-servers/{{ guild.id }}/dashboard">📈 Dashboard</a>
+    </div>
+
+    {% set saved = request.args.get('saved') %}
+    {% set error = request.args.get('error') %}
+    {% if saved == 'roles' %}<div class="banner ok">✅ Ticket settings saved.</div>{% endif %}
+    {% if saved == 'owner' %}<div class="banner ok">✅ Owner settings saved. The recap panel updates within a minute.</div>{% endif %}
+    {% if error == 'owner_ign' %}<div class="banner err">⚠️ That doesn't look like a valid Minecraft IGN for the owner.</div>{% endif %}
+    {% if error == 'owner_ign_missing' %}<div class="banner err">⚠️ Enter the owner's IGN too, or clear the owner fee.</div>{% endif %}
+    {% if error == 'owner_fee' %}<div class="banner err">⚠️ The owner fee must be a whole number from 1 up to the builder fee % ({{ settings.get('fee_percent') if settings.get('fee_percent') not in (None, '') else 15 }}%).</div>{% endif %}
+    {% if saved == 'bot_profile' %}<div class="banner ok">✅ Bot profile updated for this server.</div>{% endif %}
+    {% if error == 'bot_profile' %}<div class="banner err">⚠️ Discord refused the profile change: {{ request.args.get('msg', 'unknown error') }}</div>{% endif %}
+    {% if error == 'bot_image_size' %}<div class="banner err">⚠️ Image too big: the bot logo can be up to 2 MB and the banner up to 5 MB.</div>{% endif %}
+    {% if saved == 'build' %}<div class="banner ok">✅ Build saved.</div>{% endif %}
+    {% if saved == 'deleted' %}<div class="banner ok">✅ Build deleted.</div>{% endif %}
+    {% if saved == 'bign' %}<div class="banner ok">✅ Builder IGN saved.</div>{% endif %}
+    {% if saved == 'bign_removed' %}<div class="banner ok">✅ Builder IGN removed.</div>{% endif %}
+    {% if saved == 'ledger' %}<div class="banner ok">✅ Builder tracker entry saved.</div>{% endif %}
+    {% if saved == 'ledger_deleted' %}<div class="banner ok">✅ Removed from the builder tracker.</div>{% endif %}
+    {% if saved == 'ledger_backfill' %}<div class="banner ok">✅ Imported {{ request.args.get('n', '0') }} past build(s) into the tracker.</div>{% endif %}
+    {% if saved == 'builds_reset' %}<div class="banner ok">✅ Build stats reset ({{ request.args.get('n', '0') }} record(s) removed). Builder IGNs were kept.</div>{% endif %}
+    {% if error == 'reset_confirm' %}<div class="banner err">⚠️ Reset cancelled: you have to type RESET exactly.</div>{% endif %}
+    {% if error == 'panel_color' %}<div class="banner err">⚠️ Accent colour must be a hex like <code>#F5A623</code>.</div>{% endif %}
+    {% if error == 'panel_image_type' %}<div class="banner err">⚠️ The banner / logo must be a PNG, JPG, GIF or WebP image.</div>{% endif %}
+    {% if error == 'panel_image_size' %}<div class="banner err">⚠️ Image too big: the banner can be up to 5 MB and the logo up to 2 MB.</div>{% endif %}
+    {% if error == 'ppb' %}<div class="banner err">⚠️ Price per block must be a number like <code>500</code> or <code>2.5k</code>.</div>{% endif %}
+    {% if error == 'ticket_limit' %}<div class="banner err">⚠️ The ticket limit must be a whole number from 1 to 50.</div>{% endif %}
+    {% if error == 'fee' %}<div class="banner err">⚠️ Builder fee must be a whole number from 0 to 100.</div>{% endif %}
+    {% if error == 'ledger_user' %}<div class="banner err">⚠️ Pick a builder (Discord user ID).</div>{% endif %}
+    {% if error == 'ledger_form' %}<div class="banner err">⚠️ Check the entry: a name, worth / received like <code>250k</code> or <code>1.5m</code>, and a rating of 1-5 (or empty).</div>{% endif %}
+    {% if error == 'ledger_missing' %}<div class="banner err">⚠️ That entry no longer exists.</div>{% endif %}
+    {% if error == 'bignform' %}<div class="banner err">⚠️ Enter a valid Discord user ID and a valid Minecraft IGN.</div>{% endif %}
+    {% if error == 'bmember' %}<div class="banner err">⚠️ That user isn't a member of this server.</div>{% endif %}
+    {% if error == 'bigntaken' %}<div class="banner err">⚠️ That IGN is already registered to another builder.</div>{% endif %}
+    {% if error == 'btracking' %}<div class="banner err">⚠️ A payout to that builder is being tracked right now. Try again once it finishes.</div>{% endif %}
+    {% if error == 'ign' %}<div class="banner err">⚠️ That doesn't look like a valid Minecraft IGN.</div>{% endif %}
+    {% if error == 'name' %}<div class="banner err">⚠️ Give the build a name.</div>{% endif %}
+    {% if error == 'price' %}<div class="banner err">⚠️ Invalid price. Use something like <code>250k</code>, <code>5m</code> or <code>1.5b</code>.</div>{% endif %}
+    {% if error == 'filetype' %}<div class="banner err">⚠️ The file must be a <code>.litematic</code> file.</div>{% endif %}
+    {% if error == 'nofile' %}<div class="banner err">⚠️ Add a litematica file for this build.</div>{% endif %}
+    {% if error == 'notfound' %}<div class="banner err">⚠️ That build no longer exists.</div>{% endif %}
+
+    <!-- 1) Ticket roles + category, 2) build manager -->
+    <!-- 0) Bot profile (per server) -->
+    <form class="mbox" method="POST" enctype="multipart/form-data" style="margin-bottom:24px">
+        <input type="hidden" name="form_type" value="save_bot_profile">
+        <input type="hidden" name="orig_bot_nick" value="{{ bot_profile.nick }}">
+        <input type="hidden" name="orig_bot_bio" value="{{ bot_profile.bio }}">
+        <h2>🤖 Bot profile <span style="font-weight:500;font-size:12px;color:var(--text-muted)">· only in {{ guild.name }}</span></h2>
+        <div class="sub">How the bot looks in <b>this server only</b>: name, bio, logo and banner. Other servers are not affected. Empty name / bio = the bot's default.</div>
+        <div class="grid2" style="margin-bottom:0">
+            <div>
+                <label class="lbl">📛 Name <span style="text-transform:none;letter-spacing:0">(server nickname · max 32)</span></label>
+                <input type="text" name="bot_nick" maxlength="32" autocomplete="off" placeholder="Donut Network" value="{{ bot_profile.nick }}">
+                <label class="lbl">📝 Description / bio <span style="text-transform:none;letter-spacing:0">(max 400)</span></label>
+                <textarea name="bot_bio" maxlength="400" style="min-height:90px" placeholder="Build services, payments and more.">{{ bot_profile.bio }}</textarea>
+            </div>
+            <div>
+                <label class="lbl">🍩 Logo <span style="text-transform:none;letter-spacing:0">(png / jpg / gif / webp · max 2 MB)</span></label>
+                {% if bot_profile.avatar_url %}
+                <img src="{{ bot_profile.avatar_url }}" alt="Current logo" style="width:72px;height:72px;object-fit:cover;border-radius:50%;display:block;margin:6px 0">
+                <label style="font-size:13px"><input type="checkbox" name="remove_bot_avatar"> Back to the default logo</label>
+                {% endif %}
+                <input type="file" name="bot_avatar" accept="image/png,image/jpeg,image/gif,image/webp">
+                <label class="lbl">🖼️ Banner <span style="text-transform:none;letter-spacing:0">(max 5 MB)</span></label>
+                {% if bot_profile.banner_url %}
+                <img src="{{ bot_profile.banner_url }}" alt="Current banner" style="max-width:100%;max-height:120px;border-radius:8px;display:block;margin:6px 0">
+                <label style="font-size:13px"><input type="checkbox" name="remove_bot_banner"> Back to the default banner</label>
+                {% endif %}
+                <input type="file" name="bot_banner" accept="image/png,image/jpeg,image/gif,image/webp">
+                <div class="hint">Leave a file box empty to keep the current image. Discord may take a minute to show changes and limits how often a profile can be edited.</div>
+            </div>
+        </div>
+        <button class="btn" type="submit">💾 Save bot profile</button>
+    </form>
+
+    <form class="mbox" method="POST" enctype="multipart/form-data" style="margin-bottom:24px">
+        <input type="hidden" name="form_type" value="save_roles">
+        <h2>🎫 Build ticket setup</h2>
+        <div class="sub">Who gets pinged and who can see build tickets, and where the ticket channels are created.</div>
+        <div class="grid2" style="margin-bottom:0">
+            <div>
+                <label class="lbl">1. Ping role <span style="text-transform:none;letter-spacing:0">(pinged in every build ticket)</span></label>
+                <select name="ping_role_id">
+                    <option value="">— None —</option>
+                    {% for r in roles %}<option value="{{ r.id }}" {{ 'selected' if r.id == settings.get('ping_role_id') else '' }}>{{ r.name }}</option>{% endfor %}
+                </select>
+
+                <label class="lbl">2. Allow roles <span style="text-transform:none;letter-spacing:0">(can see &amp; talk in tickets)</span></label>
+                <select name="allow_roles" multiple>
+                    {% for r in roles %}<option value="{{ r.id }}" {{ 'selected' if r.id in (settings.get('allow_role_ids') or []) else '' }}>{{ r.name }}</option>{% endfor %}
+                </select>
+                <div class="hint">Ctrl/Cmd-click to pick more than one.</div>
+            </div>
+            <div>
+                <label class="lbl">Receiver IGN <span style="text-transform:none;letter-spacing:0">(the account customers pay)</span></label>
+                <input type="text" name="receiver_ign" maxlength="25" placeholder="e.g. 0xVoidX" autocomplete="off"
+                       value="{{ settings.get('receiver_ign', '') }}">
+                <div class="hint">Shown in the payment embed and watched for payments (5 minutes).</div>
+
+                <label class="lbl">Category *</label>
+                <input type="text" name="category_name" list="cat-list" maxlength="100" autocomplete="off"
+                       placeholder="e.g. Build Tickets" value="{{ category_name }}">
+                <datalist id="cat-list">{% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}</datalist>
+                <div class="hint">Type a category name. If it exists, tickets go there; if not, it's created when the first ticket opens.</div>
+
+                <label class="lbl">Payment log channel <span style="text-transform:none;letter-spacing:0">(confirmed payments are posted here)</span></label>
+                <select name="payment_log_channel_id">
+                    <option value="">— None —</option>
+                    {% for c in text_channels %}<option value="{{ c.id }}" {{ 'selected' if c.id == settings.get('payment_log_channel_id') else '' }}>#{{ c.name }}</option>{% endfor %}
+                </select>
+                <div class="hint">Every confirmed build payment (catalog and custom) is logged here with payer, amount, customer and builder.</div>
+
+                <label class="lbl">Builder payout log channel <span style="text-transform:none;letter-spacing:0">(when a builder is paid)</span></label>
+                <select name="builder_payout_log_channel_id">
+                    <option value="">— Use the payment log channel —</option>
+                    {% for c in text_channels %}<option value="{{ c.id }}" {{ 'selected' if c.id == settings.get('builder_payout_log_channel_id') else '' }}>#{{ c.name }}</option>{% endfor %}
+                </select>
+                <div class="hint">Every confirmed builder payout (price minus the 15% fee) is logged here. Empty = it goes to the payment log channel above.</div>
+
+                <label class="lbl">Review channel <span style="text-transform:none;letter-spacing:0">(customer reviews are posted here)</span></label>
+                <select name="review_channel_id">
+                    <option value="">— None —</option>
+                    {% for c in text_channels %}<option value="{{ c.id }}" {{ 'selected' if c.id == settings.get('review_channel_id') else '' }}>#{{ c.name }}</option>{% endfor %}
+                </select>
+
+                <label class="lbl">Finished category <span style="text-transform:none;letter-spacing:0">(tickets move here after <code>/builder finish</code>)</span></label>
+                <input type="text" name="finished_category_name" list="cat-list" maxlength="100" autocomplete="off"
+                       placeholder="e.g. Finished Builds" value="{{ settings.get('finished_category_name') or '' }}">
+                <div class="hint">Created automatically if it doesn't exist.</div>
+
+                <label class="lbl">⛏️ Digout price per block <span style="text-transform:none;letter-spacing:0">(X × Y × Z × this)</span></label>
+                <input type="text" name="price_per_block" maxlength="12" placeholder="e.g. 500 or 2.5k" autocomplete="off"
+                       value="{{ settings.get('price_per_block') or '' }}">
+                <div class="hint">Turns on the <b>Digout</b> button on the build panel. Leave empty to turn digouts off.</div>
+
+                <label class="lbl">🏦 Builder fee % <span style="text-transform:none;letter-spacing:0">(kept from each build; builders get the rest)</span></label>
+                <input type="text" name="fee_percent" maxlength="3" placeholder="15" autocomplete="off"
+                       value="{{ settings.get('fee_percent') if settings.get('fee_percent') not in (None, '') else 15 }}">
+                <div class="hint">0–100, whole numbers. Applies to new payouts; payout embeds that already exist keep their amount. Default 15.</div>
+
+                <label class="lbl">🎫 Max open build tickets per person</label>
+                <input type="number" name="max_tickets_per_user" min="1" max="50" placeholder="2" autocomplete="off"
+                       value="{{ settings.get('max_tickets_per_user') if settings.get('max_tickets_per_user') not in (None, '') else 2 }}">
+                <div class="hint">How many build tickets one person can have open at the same time (1–50). Default 2.</div>
+
+                <label class="lbl">🎨 Panel title <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+                <input type="text" name="panel_title" maxlength="80" autocomplete="off"
+                       placeholder="🍩 Donut Network · Build Services" value="{{ settings.get('panel_title') or '' }}">
+
+                <label class="lbl">🎨 Panel intro text <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+                <textarea name="panel_intro" maxlength="400" style="min-height:70px"
+                          placeholder="Pick a build below, pay in-game, and a builder gets to work.">{{ settings.get('panel_intro') or '' }}</textarea>
+
+                <label class="lbl">🎨 Accent colour <span style="text-transform:none;letter-spacing:0">(hex)</span></label>
+                <input type="text" name="panel_color" maxlength="7" autocomplete="off" placeholder="#F5A623"
+                       value="{{ settings.get('panel_color') or '' }}">
+
+                <label class="lbl">🖼️ Banner image <span style="text-transform:none;letter-spacing:0">(upload · png / jpg / gif / webp · max 5 MB)</span></label>
+                {% if settings.get('panel_banner_file_id') %}
+                <img src="/admin/bot-servers/{{ guild.id }}/panel-image/banner?v={{ settings.get('panel_banner_file_id') }}" alt="Current banner"
+                     style="max-width:100%; max-height:140px; border-radius:8px; display:block; margin:6px 0">
+                <label style="font-size:13px"><input type="checkbox" name="remove_banner"> Remove the current banner</label>
+                {% endif %}
+                <input type="file" name="panel_banner" accept="image/png,image/jpeg,image/gif,image/webp">
+
+                <label class="lbl">🍩 Logo image <span style="text-transform:none;letter-spacing:0">(upload · small corner image · max 2 MB)</span></label>
+                {% if settings.get('panel_logo_file_id') %}
+                <img src="/admin/bot-servers/{{ guild.id }}/panel-image/logo?v={{ settings.get('panel_logo_file_id') }}" alt="Current logo"
+                     style="width:72px; height:72px; object-fit:cover; border-radius:8px; display:block; margin:6px 0">
+                <label style="font-size:13px"><input type="checkbox" name="remove_logo"> Remove the current logo</label>
+                {% endif %}
+                <input type="file" name="panel_logo" accept="image/png,image/jpeg,image/gif,image/webp">
+                <div class="hint">Leave a file box empty to keep the current image. No logo uploaded = the server icon is used. The panel updates itself within ~45 seconds after saving.</div>
+
+                <label class="lbl">3. Build manager role</label>
+                <select name="manager_role_id">
+                    <option value="">— None —</option>
+                    {% for r in roles %}<option value="{{ r.id }}" {{ 'selected' if r.id == settings.get('manager_role_id') else '' }}>{{ r.name }}</option>{% endfor %}
+                </select>
+                <div class="hint">Can post <code>/bm panel</code>, send the build file and close tickets. Admins always can.</div>
+            </div>
+        </div>
+        <button class="btn" type="submit">💾 Save ticket setup</button>
+    </form>
+
+    <form class="mbox" method="POST" style="margin-bottom:24px" id="owner">
+        <input type="hidden" name="form_type" value="save_owner">
+        {% set cur_fee = settings.get('fee_percent') if settings.get('fee_percent') not in (None, '') else 15 %}
+        <h2>👑 Owner</h2>
+        <div class="sub">The owner gets a cut of every build, paid out of the builder fee. The build manager pays it from the recap panel (<b>Settle Owner Amount</b>).</div>
+        <label class="lbl">Owner IGN <span style="text-transform:none;letter-spacing:0">(who gets paid in-game)</span></label>
+        <input type="text" name="owner_ign" maxlength="25" placeholder="e.g. 0xVoidX" autocomplete="off"
+               value="{{ settings.get('owner_ign', '') }}">
+
+        <label class="lbl">👑 Owner fee % <span style="text-transform:none;letter-spacing:0">(of the build price, 1 to {{ cur_fee }})</span></label>
+        <input type="number" name="owner_fee_percent" min="1" max="{{ cur_fee }}" step="1" placeholder="e.g. 5"
+               value="{{ settings.get('owner_fee_percent') or '' }}">
+        <div class="hint">Comes out of the {{ cur_fee }}% builder fee, so it can't be below 1 or above {{ cur_fee }}. Leave empty for no owner fee.
+            The owner's share of a build is fixed when the builder is paid (changing this only affects builds paid after you save), and it only counts builds the builder has been paid for.
+            Money we keep from partial refunds also earns the owner this % of what we kept.</div>
+        <button class="btn" type="submit">💾 Save owner settings</button>
+    </form>
+
+    <!-- 4) Builds -->
+    <div class="grid2">
+        <div class="mbox">
+            <h2>🏗️ Builds</h2>
+            <div class="sub">Shown in the <code>/bm panel</code> dropdown with their price.</div>
+            {% for b in builds %}
+            <div class="build">
+                <div>
+                    <div class="nm">🧱 {{ b.name }} — {{ b.price_fmt }}</div>
+                    <div class="mt">📎 <a href="/admin/bot-servers/{{ guild.id }}/builds/{{ b.id }}/download">{{ b.filename or 'file' }}</a>
+                        {% if b.size %}· {{ (b.size / 1048576)|round(2) }} MB{% endif %}</div>
+                </div>
+                <div class="act">
+                    <button class="btn btn-ghost btn-xs" type="button"
+                            onclick='editBuild({{ {"id": b.id, "name": b.name, "price": b.price_text or b.price|string} | tojson }})'>Edit</button>
+                    <form method="POST" style="display:inline" onsubmit="return confirm('Delete this build?')">
+                        <input type="hidden" name="form_type" value="delete_build">
+                        <input type="hidden" name="build_id" value="{{ b.id }}">
+                        <button class="btn btn-del btn-xs" type="submit">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty">No builds yet. Add your first one →</div>
+            {% endfor %}
+        </div>
+
+        <form class="mbox" method="POST" enctype="multipart/form-data" id="build-form">
+            <input type="hidden" name="form_type" value="save_build">
+            <input type="hidden" name="build_id" id="f-build-id">
+            <h2 id="build-heading">➕ Add a build</h2>
+            <div class="sub">Name it, attach the litematica file and set the price.</div>
+
+            <label class="lbl">Build name *</label>
+            <input type="text" name="name" id="f-name" maxlength="80" required>
+
+            <label class="lbl">Price *</label>
+            <input type="text" name="price" id="f-price" placeholder="e.g. 250k, 5m, 1.5b" required>
+
+            <label class="lbl" id="file-lbl">Litematica file (.litematic) *</label>
+            <input type="file" name="file" id="f-file" accept=".litematic" required>
+            <div class="hint" id="file-hint">Max 30 MB.</div>
+
+            <div style="display:flex; gap:8px;">
+                <button class="btn" type="submit">💾 Save build</button>
+                <button class="btn btn-ghost" type="button" onclick="resetBuild()">Clear</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 5) Builder IGNs -->
+    <div class="grid2">
+        <div class="mbox">
+            <h2>👷 Builder IGNs</h2>
+            <div class="sub">Payout accounts. Builders use <code>/builder ign set|change</code>; the build manager uses <code>/bm ign set</code> and <code>/bm ign remove</code>. Payouts always go to the IGN shown here.</div>
+            {% for b in builder_igns %}
+            <div class="build">
+                <div>
+                    <div class="nm">🎮 {{ b.ign }} — {{ b.user_name or 'Unknown user' }}</div>
+                    <div class="mt">ID {{ b.user_id }} · {{ '✅ verified in-game' if b.verified else '⚠️ set on the dashboard (not verified in-game)' }} · via {{ b.source or '—' }}{% if b.updated %} · {{ b.updated }}{% endif %}</div>
+                </div>
+                <div class="act">
+                    <button class="btn btn-ghost btn-xs" type="button"
+                            onclick='editBuilderIgn({{ {"uid": b.user_id, "ign": b.ign, "name": b.user_name or ""} | tojson }})'>Edit</button>
+                    <form method="POST" style="display:inline" onsubmit="return confirm('Remove this builder IGN?')">
+                        <input type="hidden" name="form_type" value="remove_builder_ign">
+                        <input type="hidden" name="user_id" value="{{ b.user_id }}">
+                        <button class="btn btn-del btn-xs" type="submit">Remove</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty">No builder IGNs yet.</div>
+            {% endfor %}
+        </div>
+
+        <form class="mbox" method="POST" id="bign-form">
+            <input type="hidden" name="form_type" value="save_builder_ign">
+            <h2 id="bign-heading">➕ Set a builder IGN</h2>
+            <div class="sub">Adds a builder or replaces their IGN. Use the in-game command <code>/bm ign set</code> if you want it verified against the game.</div>
+
+            <label class="lbl">Discord user ID *</label>
+            <input type="text" name="user_id" id="f-bign-uid" inputmode="numeric" placeholder="e.g. 123456789012345678" required>
+            <div class="hint" id="bign-name">Right-click the user in Discord → Copy User ID.</div>
+
+            <label class="lbl">In-game name (IGN) *</label>
+            <input type="text" name="builder_ign" id="f-bign-ign" maxlength="25" placeholder="e.g. 0xVoidX" autocomplete="off" required>
+
+            <div style="display:flex; gap:8px;">
+                <button class="btn" type="submit">💾 Save IGN</button>
+                <button class="btn btn-ghost" type="button" onclick="resetBuilderIgn()">Clear</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 6) Builder tracker -->
+    <div id="tracker" style="margin-top:24px">
+    <div class="grid2">
+        <div class="mbox">
+            <h2>📈 Builder tracker</h2>
+            <div class="sub">Builders = members with an allow role. Entries are added automatically when a build is finished and rated, and marked paid when the builder payout is confirmed. You can add, edit or remove any entry.
+                "Worth" is the build price without the fee, "Received" is what the builder got after the 15% fee (only paid entries count).</div>
+            {% if not tracker.members_ok %}<div class="empty">Set the allow roles above to list your builders here.</div>{% endif %}
+            {% for b in tracker.builders %}
+            <div class="bcard">
+                <div class="hd">
+                    <div class="nm">🛠️ {{ b.name }} <span class="mt" style="font-weight:400">ID {{ b.id }}</span></div>
+                    <div class="act" style="display:flex; gap:6px;">
+                        <button class="btn btn-ghost btn-xs" type="button" onclick='newEntry({{ {"uid": b.id, "name": b.name} | tojson }})'>➕ Add build</button>
+                        {% if b.entries %}
+                        <form method="POST" style="display:inline" onsubmit="return confirm('Remove ALL tracker entries of this builder?')">
+                            <input type="hidden" name="form_type" value="ledger_clear">
+                            <input type="hidden" name="user_id" value="{{ b.id }}">
+                            <button class="btn btn-del btn-xs" type="submit">Clear all</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="chips">
+                    <span class="chip">🧱 Builds done: <b>{{ b.builds_done }}</b></span>
+                    <span class="chip">💎 Build worth: <b>{{ b.worth }}</b></span>
+                    <span class="chip">💰 Received (after fee): <b>{{ b.received }}</b></span>
+                    <span class="chip">⭐ Rating: <b>{{ b.rating }}</b>{% if b.rating_n %} ({{ b.rating_n }}){% endif %}</span>
+                    {% if b.pending %}<span class="chip">⏳ Unpaid: <b>{{ b.pending }}</b></span>{% endif %}
+                </div>
+                {% for e in b.entries %}
+                <div class="ent">
+                    <div>
+                        <div><b>{{ e.build_name }}</b> · worth {{ e.worth_fmt }} · received {{ e.received_fmt }} · {{ ('⭐' * e.rating) if e.rating else 'no rating' }}</div>
+                        <div class="mt">{{ '✅ paid' if e.paid else '⏳ not paid yet' }} · {{ e.source or '—' }}{% if e.when %} · {{ e.when }}{% endif %}</div>
+                    </div>
+                    <div class="act" style="display:flex; gap:6px;">
+                        <button class="btn btn-ghost btn-xs" type="button"
+                                onclick='editEntry({{ {"id": e.id, "uid": b.id, "name": b.name, "build": e.build_name, "worth": e.worth_raw, "received": e.received_raw, "rating": e.rating or "", "paid": e.paid} | tojson }})'>Edit</button>
+                        <form method="POST" style="display:inline" onsubmit="return confirm('Remove this entry?')">
+                            <input type="hidden" name="form_type" value="ledger_delete">
+                            <input type="hidden" name="entry_id" value="{{ e.id }}">
+                            <button class="btn btn-del btn-xs" type="submit">Remove</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            {% if tracker.members_ok %}<div class="empty">No builders found yet.</div>{% endif %}
+            {% endfor %}
+            <form method="POST" onsubmit="return confirm('Import finished builds from before the tracker existed? Entries you removed earlier can come back.')">
+                <input type="hidden" name="form_type" value="ledger_backfill">
+                <button class="btn btn-ghost" type="submit">📥 Import past finished builds</button>
+            </form>
+            <form method="POST" style="margin-top:14px" onsubmit="var v = prompt('This permanently wipes ALL builds done, money received, paid / unpaid entries, payment logs and reviews for this server.\nBuilder IGNs are kept.\n\nType RESET to confirm:'); if (v !== 'RESET') { return false; } this.confirm.value = v;">
+                <input type="hidden" name="form_type" value="ledger_reset_all">
+                <input type="hidden" name="confirm" value="">
+                <button class="btn btn-del" type="submit">🗑️ Reset all build stats</button>
+                <div class="mt">Wipes the tracker, payments received / paid out, recap totals and reviews. Builder IGNs stay.</div>
+            </form>
+        </div>
+
+        <form class="mbox" method="POST" id="ledger-form">
+            <input type="hidden" name="form_type" value="ledger_save">
+            <input type="hidden" name="entry_id" id="f-l-id">
+            <h2 id="ledger-heading">➕ Add a build to a builder</h2>
+            <div class="sub" id="ledger-who">Use "➕ Add build" on a builder, or paste a Discord user ID.</div>
+
+            <label class="lbl">Builder Discord user ID *</label>
+            <input type="text" name="user_id" id="f-l-uid" inputmode="numeric" list="builder-ids" placeholder="e.g. 123456789012345678" required>
+            <datalist id="builder-ids">{% for b in tracker.builders %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</datalist>
+
+            <label class="lbl">Build name *</label>
+            <input type="text" name="build_name" id="f-l-name" maxlength="80" placeholder="e.g. Cactus farm" required>
+
+            <label class="lbl">Build worth (without fee) *</label>
+            <input type="text" name="worth" id="f-l-worth" placeholder="e.g. 250k, 1.5m" required>
+
+            <label class="lbl">Money received (after fee)</label>
+            <input type="text" name="received" id="f-l-recv" placeholder="e.g. 212.5k (empty = 0)">
+
+            <label class="lbl">Rating received (1-5, optional)</label>
+            <input type="number" name="rating" id="f-l-rating" min="1" max="5" placeholder="5">
+
+            <label class="lbl" style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0">
+                <input type="checkbox" name="paid" id="f-l-paid" style="width:auto" checked> Builder was paid (counts in "Received")
+            </label>
+
+            <div style="display:flex; gap:8px;">
+                <button class="btn" type="submit">💾 Save entry</button>
+                <button class="btn btn-ghost" type="button" onclick="resetEntry()">Clear</button>
+            </div>
+        </form>
+    </div>
+    </div>
+</div>
+
+<script>
+function newEntry(b) {
+    resetEntry();
+    document.getElementById('f-l-uid').value = b.uid;
+    document.getElementById('ledger-who').textContent = 'Adding a build for: ' + b.name;
+    document.getElementById('ledger-form').scrollIntoView({behavior: 'smooth'});
+}
+function editEntry(e) {
+    document.getElementById('ledger-heading').textContent = '✏️ Edit tracker entry';
+    document.getElementById('f-l-id').value = e.id;
+    document.getElementById('f-l-uid').value = e.uid;
+    document.getElementById('f-l-name').value = e.build;
+    document.getElementById('f-l-worth').value = e.worth;
+    document.getElementById('f-l-recv').value = e.received;
+    document.getElementById('f-l-rating').value = e.rating;
+    document.getElementById('f-l-paid').checked = !!e.paid;
+    document.getElementById('ledger-who').textContent = 'Editing an entry of: ' + e.name;
+    document.getElementById('ledger-form').scrollIntoView({behavior: 'smooth'});
+}
+function resetEntry() {
+    document.getElementById('ledger-form').reset();
+    document.getElementById('f-l-id').value = '';
+    document.getElementById('f-l-paid').checked = true;
+    document.getElementById('ledger-heading').textContent = '➕ Add a build to a builder';
+    document.getElementById('ledger-who').textContent = 'Use "➕ Add build" on a builder, or paste a Discord user ID.';
+}
+</script>
+
+<script>
+function editBuilderIgn(b) {
+    document.getElementById('bign-heading').textContent = '✏️ Edit builder IGN';
+    document.getElementById('f-bign-uid').value = b.uid;
+    document.getElementById('f-bign-ign').value = b.ign;
+    document.getElementById('bign-name').textContent = b.name ? ('Builder: ' + b.name) : 'Editing this builder.';
+    document.getElementById('bign-form').scrollIntoView({behavior: 'smooth'});
+}
+function resetBuilderIgn() {
+    document.getElementById('bign-form').reset();
+    document.getElementById('bign-heading').textContent = '➕ Set a builder IGN';
+    document.getElementById('bign-name').textContent = 'Right-click the user in Discord → Copy User ID.';
+}
+</script>
+<script>
+function editBuild(b) {
+    document.getElementById('build-heading').textContent = '✏️ Edit build';
+    document.getElementById('f-build-id').value = b.id;
+    document.getElementById('f-name').value = b.name;
+    document.getElementById('f-price').value = b.price;
+    const f = document.getElementById('f-file');
+    f.required = false; f.value = '';
+    document.getElementById('file-lbl').textContent = 'Replace litematica file (optional)';
+    document.getElementById('file-hint').textContent = 'Leave empty to keep the current file.';
+    document.getElementById('build-form').scrollIntoView({behavior: 'smooth'});
+}
+function resetBuild() {
+    document.getElementById('build-form').reset();
+    document.getElementById('build-heading').textContent = '➕ Add a build';
+    document.getElementById('f-build-id').value = '';
+    document.getElementById('f-file').required = true;
+    document.getElementById('file-lbl').textContent = 'Litematica file (.litematic) *';
+    document.getElementById('file-hint').textContent = 'Max 30 MB.';
+}
+</script>
+</body>
+</html>

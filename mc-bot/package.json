@@ -1,0 +1,14 @@
+{
+  "name": "aura-afk-mc-bot",
+  "version": "1.0.0",
+  "description": "Minecraft Bot backend for Aura AFK",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mineflayer": "^4.20.1",
+    "prismarine-auth": "^2.3.0"
+  }
+}

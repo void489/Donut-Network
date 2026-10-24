@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stats Channels — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a {
+            text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px;
+            border-radius: var(--r-sm); transition: border-color var(--transition), color var(--transition);
+        }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+
+        .saved-banner {
+            background: var(--success-tint); border: 1px solid rgba(34,197,94,0.3); color: #4ade80;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+        .error-banner {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.3); color: #f87171;
+            padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px;
+        }
+
+        .search-row input {
+            width: 100%; max-width: 340px; background: var(--input-bg); border: 1px solid var(--border);
+            border-radius: var(--r-sm); padding: 10px 13px; color: var(--text-bright); font-family: var(--font-body);
+            font-size: 13.5px; margin-bottom: 20px; outline: none;
+        }
+        .search-row input:focus { border-color: var(--border-focus); }
+
+        .server-list { display: flex; flex-direction: column; gap: 10px; }
+        .server-row {
+            display: flex; align-items: center; gap: 14px;
+            background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+            padding: 14px 16px;
+        }
+        .server-row img.icon, .server-row .icon-fallback {
+            width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+        }
+        .server-row .icon-fallback {
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-muted); color: var(--text-muted); font-weight: 800; font-size: 16px;
+        }
+        .server-info { flex: 1; min-width: 0; }
+        .server-info .name { font-size: 14.5px; font-weight: 700; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .server-info .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .server-info .meta .owner-tag { color: var(--warning); font-weight: 700; }
+        .server-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+        .server-actions button {
+            border-radius: var(--r-sm); padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+            font-family: inherit; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text-main);
+        }
+        .server-actions button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .server-actions .btn-leave {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.25); color: #f87171;
+        }
+        .server-actions .btn-leave:hover { background: rgba(239,68,68,0.2); }
+        .server-actions button:disabled { opacity: .5; cursor: default; }
+        .invite-result { font-size: 12px; margin-top: 6px; word-break: break-all; }
+        .invite-result a { color: var(--accent-light); }
+        .invite-result.error { color: #f87171; }
+        .ai-form { display: flex; gap: 14px; align-items: center; margin-top: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-main); }
+        .ai-form label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+        .ai-form input[type=checkbox] { accent-color: var(--accent); }
+        .ai-form button { border-radius: var(--r-sm); padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text-main); }
+        .ai-form button:hover { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .empty-note { color: var(--text-muted); font-size: 13.5px; padding: 30px 0; text-align: center; }
+    
+        .sc-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px; margin-bottom: 22px; }
+        .sc-card h2 { font-size: 15px; font-weight: 700; color: var(--text-bright); margin: 0 0 6px; }
+        .sc-card p.hint { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; }
+        .add-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .add-row select, .add-row input[type=text] { color-scheme: dark; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; color: var(--text-bright); font-family: inherit; font-size: 13.5px; min-width: 200px; }
+        .add-row select option { background: #161c29; color: #f0f1f3; }
+        .add-row input[type=text] { min-width: 220px; outline: none; }
+        .add-row .or { font-size: 12px; color: var(--text-muted); font-weight: 700; }
+        .btn { border-radius: var(--r-sm); padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: var(--accent); color: #fff; }
+        .btn.ghost { background: var(--bg-muted); color: var(--text-main); }
+        .btn.danger { background: var(--danger-tint); border-color: rgba(239,68,68,0.25); color: #f87171; }
+        .btn:disabled { opacity: .5; cursor: default; }
+        .chan-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+        .chan-row:first-of-type { border-top: 0; }
+        .chan-info { flex: 1; min-width: 0; }
+        .chan-info .name { font-size: 14px; font-weight: 700; color: var(--text-bright); }
+        .chan-info .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; word-break: break-all; }
+        .chan-info .meta a { color: var(--accent-light); }
+
+.tick-list { max-height:340px; overflow:auto; border:1px solid var(--border); border-radius:var(--r-sm); padding:6px; }
+        .tick-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; cursor:pointer; font-size:13.5px; color:var(--text-main); font-weight:600; }
+        .tick-row:hover { background:var(--bg-muted); }
+        .tick-row input { accent-color: var(--accent); width:16px; height:16px; }
+.noadv { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--text-main); cursor:pointer; padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,.03); transition:border-color .25s, background .25s, box-shadow .3s, opacity .2s; user-select:none; }
+        .noadv:hover { border-color:rgba(165,168,255,.5); }
+        .noadv:has(input:checked) { background:rgba(99,102,241,.16); border-color:rgba(124,127,247,.6); color:#fff; box-shadow:0 0 22px -8px var(--accent-glow); }
+        .noadv.saving { opacity:.55; } .noadv.saved { box-shadow:0 0 0 3px rgba(34,197,94,.35); }
+        .noadv input { width:16px; height:16px; accent-color:#7c7ff7; }
+</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>📍 Stats Channels</h1>
+        <a href="/admin/logout" class="logout">🚪 Log Out</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels" class="active">📍 Stats Channels</a>
+    </div>
+
+    {% if msg %}<div class="saved-banner">✅ {{ msg }}</div>{% endif %}
+    {% if err %}<div class="error-banner">⚠️ {{ err }}</div>{% endif %}
+
+    <div class="sc-card">
+        <h2>Choose stats channels</h2>
+        <p class="hint">Pick a server and tick every channel where /stats and !stats may be used. Used anywhere else, /stats tells people where it can be used, except for channels ticked "Don't advertise" below. Nothing ticked in any server = works everywhere.</p>
+        <div class="add-row">
+            <select id="guild-select">
+                <option value="">Pick a server…</option>
+                {% for g in guilds %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <form method="POST" id="tick-form" style="display:none;margin-top:14px;">
+            <div id="tick-list" class="tick-list"></div>
+            <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                <button type="button" class="btn ghost" id="tick-none">Untick all</button>
+                <button type="submit" class="btn">Save channels</button>
+            </div>
+        </form>
+        {% if not guilds %}<p class="hint" style="margin:12px 0 0;">The server list is empty (the bot token may be missing or the bot isn't in any servers). You can still paste a channel ID below.</p>{% endif %}
+        <details style="margin-top:16px;"><summary class="hint" style="cursor:pointer;">Add by channel ID instead</summary>
+            <form method="POST" action="/admin/stats-channels/add" class="add-row" style="margin-top:10px;">
+                <input type="text" name="channel_id_manual" id="manual-id" placeholder="paste a channel ID" inputmode="numeric">
+                <button type="submit" class="btn" id="add-btn" disabled>Add</button>
+            </form>
+        </details>
+    </div>
+
+    <div class="sc-card">
+        <h2>Allowed channels</h2>
+        {% if entries %}
+            {% for e in entries %}
+            <div class="chan-row">
+                <div class="chan-info">
+                    <div class="name">#{{ e.channel_name or 'unknown' }} <span style="color:var(--text-muted);font-weight:600;">· {{ e.guild_name or 'unknown server' }}</span></div>
+                    <div class="meta">Channel ID: {{ e.channel_id }}</div>
+                </div>
+                <label class="noadv" title="When ticked, /stats never mentions this channel to people using it elsewhere">
+                    <input type="checkbox" class="noadv-box" data-id="{{ e.channel_id }}" {{ 'checked' if e.no_advertise else '' }}>
+                    <span>Don't advertise</span>
+                </label>
+                <form method="POST" action="/admin/stats-channels/{{ e.channel_id }}/remove" style="margin:0;">
+                    <button type="submit" class="btn danger">Remove</button>
+                </form>
+            </div>
+            {% endfor %}
+            <form method="POST" action="/admin/stats-channels/clear" style="margin-top:14px;"
+                  onsubmit="return confirm('Remove every stats channel? /stats will then work everywhere.');">
+                <button type="submit" class="btn ghost">Remove all (allow everywhere)</button>
+            </form>
+        {% else %}
+            <div class="empty-note">No channels set: /stats works everywhere.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+const guildSel = document.getElementById('guild-select');
+const form = document.getElementById('tick-form');
+const list = document.getElementById('tick-list');
+guildSel.addEventListener('change', async () => {
+    form.style.display = 'none'; list.textContent = '';
+    if (!guildSel.value) return;
+    list.textContent = 'Loading…'; form.style.display = 'block';
+    form.action = `/admin/stats-channels/guild/${guildSel.value}/save`;
+    try {
+        const r = await fetch(`/admin/stats-channels/guild/${guildSel.value}/channels`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'failed');
+        list.textContent = '';
+        d.channels.forEach(c => {
+            const row = document.createElement('label');
+            row.className = 'tick-row';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.name = 'channel_ids'; cb.value = c.id; cb.checked = !!c.allowed;
+            const span = document.createElement('span');
+            span.textContent = '#' + c.name;
+            row.append(cb, span);
+            list.append(row);
+        });
+        if (!d.channels.length) list.textContent = 'No text channels found.';
+    } catch (e) {
+        list.textContent = "Couldn't load channels: " + e.message;
+    }
+});
+document.getElementById('tick-none').addEventListener('click', () =>
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false));
+const manual = document.getElementById('manual-id');
+const addBtn = document.getElementById('add-btn');
+manual.addEventListener('input', () => { addBtn.disabled = !manual.value.trim(); });
+document.querySelectorAll('.noadv-box').forEach(cb => cb.addEventListener('change', async () => {
+    const row = cb.closest('.noadv'); row.classList.add('saving');
+    try {
+        const r = await fetch(`/admin/stats-channels/${cb.dataset.id}/advertise`, {
+            method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'no_advertise=' + (cb.checked ? '1' : '0')});
+        if (!(await r.json()).ok) throw new Error();
+        row.classList.add('saved'); setTimeout(() => row.classList.remove('saved'), 900);
+    } catch (e) { cb.checked = !cb.checked; alert("Couldn't save that change."); }
+    row.classList.remove('saving');
+}));
+</script>
+</body>
+</html>

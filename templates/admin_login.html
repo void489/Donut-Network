@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        .admin-box {
+            width: 100%; max-width: 380px; background: var(--bg-surface);
+            border: 1px solid var(--border); border-radius: var(--r-lg);
+            padding: 34px 30px; position: relative; z-index: 1;
+            box-shadow: var(--shadow-lift);
+            animation: fadeInUp 0.4s var(--transition-slow) both;
+        }
+        .admin-box .brand-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-tint); display:inline-block; margin-right:8px; }
+        .admin-box h1 { font-size: 20px; font-weight: 800; color: var(--text-bright); margin-bottom: 6px; letter-spacing: -0.02em; }
+        .admin-box p.sub { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+        .admin-field { margin-bottom: 16px; }
+        .admin-field label { display:block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; font-weight: 700; }
+        .admin-field input {
+            width: 100%; background: var(--input-bg); border: 1px solid var(--border);
+            border-radius: var(--r-sm); padding: 11px 13px; color: var(--text-bright);
+            font-family: var(--font-body); font-size: 14px; outline: none;
+            transition: border-color var(--transition);
+        }
+        .admin-field input:focus { border-color: var(--border-focus); }
+        .admin-error {
+            background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.25); color: #f87171;
+            font-size: 12.5px; padding: 9px 12px; border-radius: var(--r-sm); margin-bottom: 16px; display: none;
+        }
+        .admin-error.show { display: block; }
+        .admin-submit {
+            width: 100%; background: var(--accent); color: #fff; border: none; border-radius: var(--r-md);
+            padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit;
+            transition: background var(--transition), transform var(--transition);
+        }
+        .admin-submit:hover { background: var(--accent-mid); transform: translateY(-1px); }
+        .admin-back { display:block; text-align:center; margin-top: 18px; font-size: 12.5px; color: var(--text-muted); text-decoration:none; }
+        .admin-back:hover { color: var(--text-main); }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+    <div class="admin-box">
+        <h1><span class="brand-dot"></span>Admin Panel</h1>
+        <p class="sub">Sign in with the admin credentials configured on the server.</p>
+
+        <div class="admin-error" id="admin-error">Invalid username or password.</div>
+
+        <form method="POST" action="/admin/login" id="admin-form">
+            <div class="admin-field">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" autocomplete="username" required>
+            </div>
+            <div class="admin-field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="admin-submit">Log In</button>
+        </form>
+
+    </div>
+
+    {% if error %}
+    <script>document.getElementById('admin-error').classList.add('show');</script>
+    {% endif %}
+</body>
+</html>

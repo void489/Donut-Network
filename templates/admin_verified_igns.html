@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verified IGNs — Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: block; height: auto; min-height: 100vh; overflow: auto; }
+        .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .admin-top h1 { font-size: 24px; font-weight: 800; color: var(--text-bright); }
+        .admin-top a.logout { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .admin-top a.logout:hover { color: #f87171; }
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .admin-nav a { text-decoration: none; font-size: 13px; font-weight: 700; color: var(--text-main);
+            background: var(--bg-surface); border: 1px solid var(--border); padding: 9px 16px; border-radius: var(--r-sm); }
+        .admin-nav a:hover, .admin-nav a.active { border-color: rgba(88,101,242,0.4); color: var(--accent-light); }
+        .banner { padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+        .banner.ok  { background: var(--success-tint); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; }
+        .banner.err { background: var(--danger-tint); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+        .grid2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; align-items: start; }
+        @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+        .mbox { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 24px; }
+        .mbox h2 { font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+        .mbox .sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5; }
+        .lbl { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin: 14px 0 6px; }
+        .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; font-style: italic; }
+        textarea { width: 100%; min-height: 130px; resize: vertical; font-family: inherit; }
+        .btn { border-radius: var(--r-sm); padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 14px; }
+        .btn-ghost { background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border); }
+        .btn-xs { padding: 5px 11px; font-size: 12px; margin-top: 0; }
+        .btn-del { background: transparent; color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+        .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 14px; }
+        .chip { background: var(--bg-muted); border:1px solid var(--border); border-radius: 999px; padding:3px 10px; font-size:12px; color: var(--text-main); }
+        .row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:9px 0; border-top:1px solid var(--border); font-size:13px; }
+        .row .nm { font-weight: 700; color: var(--text-bright); }
+        .row .mt { font-size:12px; color: var(--text-muted); margin-top: 2px; }
+        .empty { color: var(--text-muted); font-size: 13px; padding: 10px 0; }
+        .search { display:flex; gap:8px; margin-bottom: 8px; }
+        .search input { flex: 1; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}" defer></script>
+</head>
+<body>
+<div class="admin-wrap">
+    <div class="admin-top">
+        <h1>✅ Verified IGNs</h1>
+        <a class="logout" href="/admin/logout">Logout</a>
+    </div>
+
+    <div class="admin-nav">
+        <a href="/admin">📊 Overview</a>
+        <a href="/admin/users">👤 My Sessions</a>
+        <a href="/admin/servers">🌐 Auth-Gate Servers</a>
+        <a href="/admin/bot-servers">🌍 Bot Servers</a>
+        <a href="/admin/verified-igns" class="active">✅ Verified IGNs</a>
+        <a href="/admin/stats-channels">📍 Stats Channels</a>
+    </div>
+
+    {% set saved = request.args.get('saved') %}
+    {% if saved == 'added' %}<div class="banner ok">✅ Added {{ request.args.get('n', '0') }} IGN(s) as verified.</div>{% endif %}
+    {% if request.args.get('bad', '0') != '0' %}<div class="banner err">⚠️ {{ request.args.get('bad') }} entr{{ 'y was' if request.args.get('bad') == '1' else 'ies were' }} skipped (not a valid Minecraft IGN).</div>{% endif %}
+    {% if saved == 'deleted' %}<div class="banner ok">✅ IGN removed. It will be checked in-game again next time.</div>{% endif %}
+    {% if saved == 'cleared' %}<div class="banner ok">✅ Removed {{ request.args.get('n', '0') }} bot-verified IGN(s).</div>{% endif %}
+
+    <div class="grid2">
+        <form class="mbox" method="POST">
+            <input type="hidden" name="action" value="add">
+            <h2>➕ Add verified IGNs</h2>
+            <div class="sub">An IGN in this list is treated as already verified: the bot skips the in-game check for it (payments, payouts and builder IGNs). The bot also adds IGNs here by itself after it verifies them.</div>
+            <label class="lbl">IGNs</label>
+            <textarea name="igns" placeholder="0xVoidX&#10;Steve_123, .BedrockName" required></textarea>
+            <div class="hint">One or more, separated by new lines, spaces or commas.</div>
+            <button class="btn" type="submit">💾 Add as verified</button>
+        </form>
+
+        <div class="mbox">
+            <h2>📋 Verified list</h2>
+            <div class="sub">Remove an IGN if the player renamed or the entry is wrong; it will be checked in-game again next time it's used.</div>
+            <div class="chips">
+                <span class="chip">Total: <b>{{ stats.total }}</b></span>
+                <span class="chip">🤖 Bot-verified: <b>{{ stats.bot }}</b></span>
+                <span class="chip">🛡️ Added by admin: <b>{{ stats.admin }}</b></span>
+            </div>
+            <form class="search" method="GET">
+                <input type="text" name="q" value="{{ q }}" placeholder="Search IGN…" autocomplete="off">
+                <button class="btn btn-ghost btn-xs" type="submit">Search</button>
+            </form>
+            {% if q %}<div class="hint" style="margin-bottom:6px">{{ matched }} match{{ '' if matched == 1 else 'es' }} for "{{ q }}"{% if matched > 500 %} (showing 500){% endif %}</div>{% elif stats.total > 500 %}<div class="hint" style="margin-bottom:6px">Showing the first 500 — use search to find others.</div>{% endif %}
+
+            {% for r in rows %}
+            <div class="row">
+                <div>
+                    <div class="nm">🎮 {{ r.ign }}</div>
+                    <div class="mt">{{ '🛡️ added by admin' if r.source == 'admin' else '🤖 verified by the bot' }} · added {{ r.added }} · used {{ r.uses or 0 }}× · last used {{ r.last_used }}</div>
+                </div>
+                <form method="POST" style="display:inline" onsubmit="return confirm('Remove {{ r.ign }} from the verified list?')">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="{{ r.id }}">
+                    <button class="btn btn-del btn-xs" type="submit">Remove</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="empty">{{ 'No IGNs match.' if q else 'No verified IGNs yet. They are added automatically when the bot verifies one.' }}</div>
+            {% endfor %}
+
+            {% if stats.bot %}
+            <form method="POST" onsubmit="return confirm('Remove ALL bot-verified IGNs? Admin-added ones stay.')">
+                <input type="hidden" name="action" value="delete_bot">
+                <button class="btn btn-del" type="submit">🗑️ Clear all bot-verified</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</body>
+</html>
