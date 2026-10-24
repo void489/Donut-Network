@@ -1,3 +1,6 @@
+import mc_setup
+mc_setup.bootstrap()  # installs Node + mc-bot deps BEFORE the heavy imports (low-RAM hosts)
+
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -73,49 +76,6 @@ async def dynamic_prefix(bot: "Bot", message: discord.Message):
         if custom:
             prefixes.add(custom)
     return list(prefixes)
-
-
-def _ensure_local_node():
-    """Make 'node'/'npm' available on hosts that only ship Python.
-    Downloads a portable Node 22 into ./.local/node once, then adds it to PATH."""
-    import platform, tarfile, urllib.request, re
-    base = pathlib.Path(__file__).parent / ".local" / "node"
-    bindir = base / "bin"
-    if not (bindir / "node").exists() and not shutil.which("node"):
-        arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine().lower())
-        if not arch:
-            print(f"❌ Unsupported CPU for portable Node: {platform.machine()}")
-            return
-        try:
-            root = "https://nodejs.org/dist/latest-v22.x/"
-            sums = urllib.request.urlopen(root + "SHASUMS256.txt", timeout=30).read().decode()
-            m = re.search(rf"(node-v[\d.]+-linux-{arch}\.tar\.xz)", sums)
-            if not m:
-                print("❌ Could not find a Node.js download for this platform.")
-                return
-            fname = m.group(1)
-            print(f"⬇️  Downloading portable Node.js ({fname})...")
-            base.mkdir(parents=True, exist_ok=True)
-            tmp = base.parent / fname
-            urllib.request.urlretrieve(root + fname, tmp)
-            with tarfile.open(tmp, "r:xz") as tf:
-                for member in tf.getmembers():
-                    parts = member.name.split("/", 1)
-                    if len(parts) < 2 or not parts[1]:
-                        continue
-                    # Skip stuff we never need (saves ~60MB of disk)
-                    if parts[1].split("/")[0] in ("include", "share") or \
-                       parts[1].startswith(("lib/node_modules/corepack", "CHANGELOG", "README", "LICENSE")):
-                        continue
-                    member.name = parts[1]
-                    tf.extract(member, base)
-            tmp.unlink(missing_ok=True)
-            print("✅ Portable Node.js installed.")
-        except Exception as e:
-            print(f"❌ Failed to install portable Node.js: {e}")
-            return
-    if bindir.is_dir():
-        os.environ["PATH"] = str(bindir) + os.pathsep + os.environ.get("PATH", "")
 
 
 class Bot(commands.Bot):
@@ -245,67 +205,6 @@ class Bot(commands.Bot):
             print(f"❌ Failed to start MC bot subprocess: {e}")
             return None
 
-    def _ensure_mc_bot_deps(self, mc_bot_dir: pathlib.Path):
-        """Make sure mc-bot/node_modules has what index.js needs (currently
-        just 'mongodb', for schedule/session persistence). Runs `npm install`
-        in that folder if it's missing, so a fresh deploy or a new host
-        doesn't require manually remembering to install it."""
-        required = ["mongodb", "mineflayer", "express"]
-        nm = mc_bot_dir / "node_modules"
-        missing = [pkg for pkg in required if not (nm / pkg).exists()]
-        # A half-written install (e.g. disk quota hit mid-install) leaves folders
-        # behind but with data files missing -> detect it and start clean.
-        marker = nm / "minecraft-data" / "minecraft-data" / "data" / "pc" / "common" / "features.json"
-        if (nm / "minecraft-data").exists() and not marker.exists():
-            print("⚠️  Broken minecraft-data install detected — reinstalling mc-bot dependencies cleanly...")
-            shutil.rmtree(nm, ignore_errors=True)
-            missing = list(required)
-        if not missing:
-            return True
-
-        npm_path = shutil.which("npm")
-        if not npm_path:
-            print(f"⚠️  'npm' not found in PATH — can't auto-install {missing} in mc-bot/. "
-                  f"Persistence features will be disabled until it's installed manually.")
-            return False
-
-        print(f"📦 Installing missing mc-bot dependencies ({', '.join(missing)})...")
-        try:
-            result = subprocess.run(
-                [npm_path, "install", "--omit=dev", "--omit=optional", "--no-audit",
-                 "--no-fund", "--no-package-lock", "mongodb"],
-                cwd=str(mc_bot_dir),
-                env={**os.environ, "npm_config_cache": "/tmp/npm-cache"},
-                capture_output=True,
-                text=True,
-                timeout=1800,
-            )
-            shutil.rmtree("/tmp/npm-cache", ignore_errors=True)
-            # Trim junk (docs, sourcemaps, tests) to save disk on small hosts
-            try:
-                for root, dirs, files in os.walk(mc_bot_dir / "node_modules"):
-                    for d in list(dirs):
-                        if d in (".github", "docs", "test", "tests", "__tests__", "example", "examples"):
-                            shutil.rmtree(os.path.join(root, d), ignore_errors=True)
-                            dirs.remove(d)
-                    for f in files:
-                        if f.endswith((".md", ".map", ".markdown")):
-                            try:
-                                os.remove(os.path.join(root, f))
-                            except OSError:
-                                pass
-            except Exception as e:
-                print(f"⚠️  node_modules cleanup skipped: {e}")
-            if result.returncode == 0:
-                print(f"✅ Installed {', '.join(missing)} in mc-bot/.")
-                return True
-            else:
-                print(f"❌ npm install failed (exit {result.returncode}):\n{result.stderr.strip()[-2000:]}")
-        except Exception as e:
-            print(f"❌ Failed to run npm install in mc-bot/: {e}")
-            shutil.rmtree(nm, ignore_errors=True)  # don't leave a half-written install behind
-        return False
-
     async def setup_hook(self):
         app_module.set_discord_bot(self)
 
@@ -324,7 +223,7 @@ class Bot(commands.Bot):
 
         # ── Spawn MC bot subprocess ──────────────────────────────────────
         mc_bot_path = pathlib.Path(__file__).parent / "mc-bot" / "index.js"
-        await asyncio.to_thread(_ensure_local_node)
+        await asyncio.to_thread(mc_setup.ensure_local_node)
         node_path = shutil.which("node")
 
         if not node_path:
@@ -333,7 +232,7 @@ class Bot(commands.Bot):
             print("⚠️  mc-bot/index.js not found — MC bot not started.")
         else:
             def _launch_mc_bot():
-                if not self._ensure_mc_bot_deps(mc_bot_path.parent):
+                if not mc_setup.ensure_mc_bot_deps(mc_bot_path.parent):
                     print("❌ mc-bot dependencies are not installed — MC bot not started.")
                     return
                 mc_env = os.environ.copy()
@@ -381,6 +280,7 @@ class Bot(commands.Bot):
                         backoff = min(backoff * 2, 60)
 
                 threading.Thread(target=monitor_mc_bot, daemon=True).start()
+                mc_setup.report_disk_usage()
 
             # Install deps + start the MC bot in the background so Discord and the
             # dashboard come up immediately (the first npm install can take minutes).
