@@ -120,7 +120,16 @@ def prune_minecraft_data(mc_bot_dir: pathlib.Path):
         print(f"ℹ️  Cannot read minecraft-data/dataPaths.json ({e}) — skipping prune.")
         return True
 
-    kept = [v for v in paths if re.match(r"^1\.(\d+)", v) and int(re.match(r"^1\.(\d+)", v).group(1)) >= keep_min]
+    def _is_recent(v):
+        # "1.21.4"-style names need minor >= keep_min; the new "26.1"-style
+        # names (Minecraft's 2026 versioning) are always recent.
+        m = re.match(r"^(\d+)\.(\d+)", v)
+        if not m:
+            return False
+        major, minor = int(m.group(1)), int(m.group(2))
+        return minor >= keep_min if major == 1 else major > 1
+
+    kept = [v for v in paths if _is_recent(v)]
     if not kept:
         print("ℹ️  No recent Java versions found in minecraft-data — skipping prune.")
         return True
