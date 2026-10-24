@@ -103,6 +103,10 @@ def _ensure_local_node():
                     parts = member.name.split("/", 1)
                     if len(parts) < 2 or not parts[1]:
                         continue
+                    # Skip stuff we never need (saves ~60MB of disk)
+                    if parts[1].split("/")[0] in ("include", "share") or \
+                       parts[1].startswith(("lib/node_modules/corepack", "CHANGELOG", "README", "LICENSE")):
+                        continue
                     member.name = parts[1]
                     tf.extract(member, base)
             tmp.unlink(missing_ok=True)
@@ -260,12 +264,15 @@ class Bot(commands.Bot):
         print(f"📦 Installing missing mc-bot dependencies ({', '.join(missing)})...")
         try:
             result = subprocess.run(
-                [npm_path, "install", "--omit=dev", "mongodb"],
+                [npm_path, "install", "--omit=dev", "--omit=optional", "--no-audit",
+                 "--no-fund", "--no-package-lock", "mongodb"],
                 cwd=str(mc_bot_dir),
+                env={**os.environ, "npm_config_cache": "/tmp/npm-cache"},
                 capture_output=True,
                 text=True,
                 timeout=180,
             )
+            shutil.rmtree("/tmp/npm-cache", ignore_errors=True)
             if result.returncode == 0:
                 print(f"✅ Installed {', '.join(missing)} in mc-bot/.")
             else:
