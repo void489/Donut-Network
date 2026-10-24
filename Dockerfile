@@ -19,6 +19,6 @@ RUN cd mc-bot && npm install --omit=dev
 # Copy rest of app
 COPY . .
 
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]
 
 

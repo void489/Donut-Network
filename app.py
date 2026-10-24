@@ -1973,4 +1973,4 @@ def _serialize_session(doc, live_status=None):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
+    app.run(host="0.0.0.0", port=int(os.getenv("SERVER_PORT") or os.getenv("PORT") or 5000), debug=False)

@@ -3,7 +3,7 @@ command_perms_core.py
 
 Shared, non-cog helpers for per-guild command configuration: role
 restrictions (existing feature), enable/disable, and custom prefixes.
-Import this from bot.py / cogs so the enable + prefix checks live in one
+Import this from main.py / cogs so the enable + prefix checks live in one
 place instead of being copy-pasted into every cog.
 
 Collection used:
