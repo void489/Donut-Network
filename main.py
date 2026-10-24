@@ -261,13 +261,13 @@ class Bot(commands.Bot):
             shutil.rmtree(nm, ignore_errors=True)
             missing = list(required)
         if not missing:
-            return
+            return True
 
         npm_path = shutil.which("npm")
         if not npm_path:
             print(f"⚠️  'npm' not found in PATH — can't auto-install {missing} in mc-bot/. "
                   f"Persistence features will be disabled until it's installed manually.")
-            return
+            return False
 
         print(f"📦 Installing missing mc-bot dependencies ({', '.join(missing)})...")
         try:
@@ -278,7 +278,7 @@ class Bot(commands.Bot):
                 env={**os.environ, "npm_config_cache": "/tmp/npm-cache"},
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=1800,
             )
             shutil.rmtree("/tmp/npm-cache", ignore_errors=True)
             # Trim junk (docs, sourcemaps, tests) to save disk on small hosts
@@ -298,10 +298,13 @@ class Bot(commands.Bot):
                 print(f"⚠️  node_modules cleanup skipped: {e}")
             if result.returncode == 0:
                 print(f"✅ Installed {', '.join(missing)} in mc-bot/.")
+                return True
             else:
                 print(f"❌ npm install failed (exit {result.returncode}):\n{result.stderr.strip()[-2000:]}")
         except Exception as e:
             print(f"❌ Failed to run npm install in mc-bot/: {e}")
+            shutil.rmtree(nm, ignore_errors=True)  # don't leave a half-written install behind
+        return False
 
     async def setup_hook(self):
         app_module.set_discord_bot(self)
@@ -329,53 +332,59 @@ class Bot(commands.Bot):
         elif not mc_bot_path.exists():
             print("⚠️  mc-bot/index.js not found — MC bot not started.")
         else:
-            await asyncio.to_thread(self._ensure_mc_bot_deps, mc_bot_path.parent)
+            def _launch_mc_bot():
+                if not self._ensure_mc_bot_deps(mc_bot_path.parent):
+                    print("❌ mc-bot dependencies are not installed — MC bot not started.")
+                    return
+                mc_env = os.environ.copy()
+                mc_env["MC_BOT_PORT"] = "3001"
+                mc_env["FLASK_INTERNAL_URL"] = f"http://127.0.0.1:{(os.getenv('SERVER_PORT') or os.getenv('PORT') or 5000)}"
 
-            mc_env = os.environ.copy()
-            mc_env["MC_BOT_PORT"] = "3001"
-            mc_env["FLASK_INTERNAL_URL"] = f"http://127.0.0.1:{(os.getenv('SERVER_PORT') or os.getenv('PORT') or 5000)}"
+                self._mc_node_path = node_path
+                self._mc_bot_path = mc_bot_path
+                self._mc_env = mc_env
 
-            self._mc_node_path = node_path
-            self._mc_bot_path = mc_bot_path
-            self._mc_env = mc_env
+                self.mc_proc = self._spawn_mc_bot()
 
-            self.mc_proc = self._spawn_mc_bot()
+                # Background monitor: if the MC bot subprocess ever dies (crash,
+                # unhandled exception, OOM, etc.), respawn it automatically with
+                # exponential backoff instead of just logging and leaving every
+                # linked Minecraft session dead until someone redeploys.
+                def monitor_mc_bot():
+                    backoff = 2
+                    while not self._mc_shutting_down:
+                        proc = self.mc_proc
+                        if proc is None:
+                            return
+                        started_at = time.monotonic()
+                        ret = proc.wait()
+                        if self._mc_shutting_down:
+                            print("ℹ️  MC bot subprocess stopped (shutting down).")
+                            return
 
-            # Background monitor: if the MC bot subprocess ever dies (crash,
-            # unhandled exception, OOM, etc.), respawn it automatically with
-            # exponential backoff instead of just logging and leaving every
-            # linked Minecraft session dead until someone redeploys.
-            def monitor_mc_bot():
-                backoff = 2
-                while not self._mc_shutting_down:
-                    proc = self.mc_proc
-                    if proc is None:
-                        return
-                    started_at = time.monotonic()
-                    ret = proc.wait()
-                    if self._mc_shutting_down:
-                        print("ℹ️  MC bot subprocess stopped (shutting down).")
-                        return
+                        ran_for = time.monotonic() - started_at
+                        # A crash-loop shouldn't restart every 2s forever; but a
+                        # process that ran fine for a while before dying should
+                        # reset the backoff instead of inheriting a long delay.
+                        if ran_for > 60:
+                            backoff = 2
 
-                    ran_for = time.monotonic() - started_at
-                    # A crash-loop shouldn't restart every 2s forever; but a
-                    # process that ran fine for a while before dying should
-                    # reset the backoff instead of inheriting a long delay.
-                    if ran_for > 60:
-                        backoff = 2
+                        print(f"⚠️  MC bot subprocess exited with code {ret} after {ran_for:.0f}s. "
+                              f"Restarting in {backoff}s...")
+                        time.sleep(backoff)
 
-                    print(f"⚠️  MC bot subprocess exited with code {ret} after {ran_for:.0f}s. "
-                          f"Restarting in {backoff}s...")
-                    time.sleep(backoff)
+                        self.mc_proc = self._spawn_mc_bot()
+                        if self.mc_proc is None:
+                            print("❌ Failed to restart MC bot subprocess.")
+                            return
 
-                    self.mc_proc = self._spawn_mc_bot()
-                    if self.mc_proc is None:
-                        print("❌ Failed to restart MC bot subprocess.")
-                        return
+                        backoff = min(backoff * 2, 60)
 
-                    backoff = min(backoff * 2, 60)
+                threading.Thread(target=monitor_mc_bot, daemon=True).start()
 
-            threading.Thread(target=monitor_mc_bot, daemon=True).start()
+            # Install deps + start the MC bot in the background so Discord and the
+            # dashboard come up immediately (the first npm install can take minutes).
+            threading.Thread(target=_launch_mc_bot, daemon=True).start()
 
         for cog in COGS:
             try:
