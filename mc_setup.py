@@ -10,6 +10,8 @@ import subprocess
 BASE = pathlib.Path(__file__).parent
 NPM_CACHE = str(BASE / ".npm-cache")
 FAIL_FLAG = BASE / ".local" / "prune_failed"
+PRUNE_RULE = BASE / ".local" / "prune_rule"
+PRUNE_RULE_VERSION = "v2"  # bump when the keep-rules change -> forces a clean reinstall
 
 
 def _npm_env():
@@ -97,6 +99,14 @@ def report_disk_usage():
         print("📊 Biggest node_modules -> " + " | ".join(f"{n}: {sz:.0f} MB" for sz, n in sizes))
 
 
+def _mark_pruned():
+    try:
+        PRUNE_RULE.parent.mkdir(parents=True, exist_ok=True)
+        PRUNE_RULE.write_text(PRUNE_RULE_VERSION)
+    except OSError:
+        pass
+
+
 def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     """minecraft-data is ~300+ MB because it ships data for Bedrock and every
     Java version ever. Newer Java versions REUSE files from older version
@@ -154,6 +164,7 @@ def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     if bedrock.is_dir():
         doomed += [d for d in bedrock.iterdir() if d.is_dir() and d.name != "common"]
     if not doomed:
+        _mark_pruned()
         return True
 
     for d in doomed:
@@ -170,7 +181,8 @@ def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     except Exception as e:
         ok, err = False, str(e)
     if ok:
-        print(f"✂️  Pruned minecraft-data: removed {len(doomed)} folders, kept {len(kept)} Java versions (1.{keep_min}+).")
+        print(f"✂️  Pruned minecraft-data: removed {len(doomed)} folders, kept {len(kept)} Java versions (1.{keep_min}+ and 26+).")
+        _mark_pruned()
         return True
 
     err = err[:700] + "\n...\n" + err[-700:] if len(err) > 1500 else err
@@ -195,6 +207,15 @@ def ensure_mc_bot_deps(mc_bot_dir: pathlib.Path):
         print("⛔ MC bot disabled: trimming minecraft-data failed last time (see error above). "
               "Send that error to your developer, then delete .local/prune_failed to retry.")
         return False
+    # node_modules trimmed under older rules (e.g. missing 26.x data) -> start clean.
+    if nm.exists() and os.getenv("MC_PRUNE_DATA") != "0":
+        try:
+            current = PRUNE_RULE.read_text().strip() if PRUNE_RULE.exists() else ""
+        except OSError:
+            current = ""
+        if current != PRUNE_RULE_VERSION:
+            print("♻️  Old trimmed mc-bot/node_modules detected — deleting it for a clean reinstall...")
+            shutil.rmtree(nm, ignore_errors=True)
     missing = [pkg for pkg in required if not (nm / pkg).exists()]
     # A half-written install (e.g. disk quota hit mid-install) leaves folders
     # behind but with data files missing -> detect it and start clean.
