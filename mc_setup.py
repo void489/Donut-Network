@@ -9,6 +9,7 @@ import subprocess
 
 BASE = pathlib.Path(__file__).parent
 NPM_CACHE = str(BASE / ".npm-cache")
+FAIL_FLAG = BASE / ".local" / "prune_failed"
 
 
 def _npm_env():
@@ -90,50 +91,74 @@ def report_disk_usage():
             size = _dir_size_mb(path) if path.exists() else 0
         parts.append(f"{label}: {size:.0f} MB")
     print("💾 Disk usage -> " + " | ".join(parts) + f" | whole folder: {_dir_size_mb(base):.0f} MB")
+    nm = base / "mc-bot" / "node_modules"
+    if nm.is_dir():
+        sizes = sorted(((_dir_size_mb(p), p.name) for p in nm.iterdir() if p.is_dir()), reverse=True)[:5]
+        print("📊 Biggest node_modules -> " + " | ".join(f"{n}: {sz:.0f} MB" for sz, n in sizes))
 
 
 def prune_minecraft_data(mc_bot_dir: pathlib.Path):
-    """minecraft-data ships data for Bedrock and every ancient Java version.
-    A Java bot on a modern server only needs 1.12+, so drop the rest to save
-    disk. If the bot can no longer load afterwards, undo by wiping node_modules
-    (it reinstalls unpruned next start) and remember not to prune again."""
+    """minecraft-data is ~300+ MB because it ships data for Bedrock and every
+    Java version ever. A Java bot on a modern server only needs recent versions.
+    Keeps 'common' folders (the library reads them at load time) and Java
+    versions >= 1.<MC_KEEP_MIN_MINOR> (default 20). Validates afterwards."""
     import re
     nm = mc_bot_dir / "node_modules"
-    flag = pathlib.Path(__file__).parent / ".local" / "no_prune"
     data = nm / "minecraft-data" / "minecraft-data" / "data"
-    if flag.exists() or os.getenv("MC_PRUNE_DATA") == "0" or not data.is_dir():
-        return
-    removed = 0
-    bedrock = data / "bedrock"
-    if bedrock.is_dir():
-        shutil.rmtree(bedrock, ignore_errors=True)
-        removed += 1
+    if os.getenv("MC_PRUNE_DATA") == "0" or not data.is_dir():
+        return True
+    try:
+        keep_min = int(os.getenv("MC_KEEP_MIN_MINOR", "20"))
+    except ValueError:
+        keep_min = 20
+
     pc = data / "pc"
+    kept = []
+    doomed = []
     if pc.is_dir():
         for d in pc.iterdir():
-            m = re.match(r"^(?:0\.|1\.(\d+))", d.name)
-            if d.is_dir() and m and (m.group(1) is None or int(m.group(1)) < 12):
-                shutil.rmtree(d, ignore_errors=True)
-                removed += 1
-    if not removed:
-        return
-    try:
-        r = subprocess.run([shutil.which("node") or "node", "-e", "require('mineflayer')"],
-                           cwd=str(mc_bot_dir), capture_output=True, text=True, timeout=120)
-        ok = r.returncode == 0
-    except Exception:
-        ok = False
-    if ok:
-        print(f"✂️  Pruned unused minecraft-data ({removed} folders) to save disk.")
-    else:
-        print("⚠️  Pruning broke mineflayer — restoring by reinstalling next start.")
-        shutil.rmtree(nm, ignore_errors=True)
-        try:
-            flag.parent.mkdir(parents=True, exist_ok=True)
-            flag.write_text("1")
-        except OSError:
-            pass
+            if not d.is_dir() or d.name == "common":
+                continue
+            m = re.match(r"^1\.(\d+)", d.name)
+            if m and int(m.group(1)) >= keep_min:
+                kept.append(d.name)
+            else:
+                doomed.append(d)
+    if not kept:
+        print("ℹ️  minecraft-data layout not recognised — skipping prune.")
+        return True
+    bedrock = data / "bedrock"
+    if bedrock.is_dir():
+        doomed += [d for d in bedrock.iterdir() if d.is_dir() and d.name != "common"]
+    if not doomed:
+        return True
 
+    for d in doomed:
+        shutil.rmtree(d, ignore_errors=True)
+
+    newest = sorted(kept, key=lambda v: [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-]", v)])[-1]
+    script = ("require('mineflayer');"
+              "const d=require('minecraft-data')(process.argv[1]);"
+              "if(!d||!d.blocksByName){process.exit(3)}")
+    try:
+        r = subprocess.run([shutil.which("node") or "node", "-e", script, newest],
+                           cwd=str(mc_bot_dir), capture_output=True, text=True, timeout=180)
+        ok = r.returncode == 0
+        err = (r.stderr or "").strip()[-1500:]
+    except Exception as e:
+        ok, err = False, str(e)
+    if ok:
+        print(f"✂️  Pruned minecraft-data: removed {len(doomed)} old/bedrock version folders, kept Java 1.{keep_min}+ .")
+        return True
+
+    print(f"❌ Pruning broke mineflayer. Error was:\n{err}")
+    shutil.rmtree(nm, ignore_errors=True)
+    try:
+        FAIL_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        FAIL_FLAG.write_text(err)
+    except OSError:
+        pass
+    return False
 
 
 def ensure_mc_bot_deps(mc_bot_dir: pathlib.Path):
@@ -143,6 +168,10 @@ def ensure_mc_bot_deps(mc_bot_dir: pathlib.Path):
     doesn't require manually remembering to install it."""
     required = ["mongodb", "mineflayer", "express"]
     nm = mc_bot_dir / "node_modules"
+    if FAIL_FLAG.exists() and os.getenv("MC_PRUNE_DATA") != "0":
+        print("⛔ MC bot disabled: trimming minecraft-data failed last time (see error above). "
+              "Send that error to your developer, then delete .local/prune_failed to retry.")
+        return False
     missing = [pkg for pkg in required if not (nm / pkg).exists()]
     # A half-written install (e.g. disk quota hit mid-install) leaves folders
     # behind but with data files missing -> detect it and start clean.
@@ -152,8 +181,7 @@ def ensure_mc_bot_deps(mc_bot_dir: pathlib.Path):
         shutil.rmtree(nm, ignore_errors=True)
         missing = list(required)
     if not missing:
-        prune_minecraft_data(mc_bot_dir)
-        return (nm / "mineflayer").exists()
+        return prune_minecraft_data(mc_bot_dir) and (nm / "mineflayer").exists()
 
     npm_path = shutil.which("npm")
     if not npm_path:
@@ -190,8 +218,7 @@ def ensure_mc_bot_deps(mc_bot_dir: pathlib.Path):
             print(f"⚠️  node_modules cleanup skipped: {e}")
         if result.returncode == 0:
             print(f"✅ Installed {', '.join(missing)} in mc-bot/.")
-            prune_minecraft_data(mc_bot_dir)
-            return (nm / "mineflayer").exists()
+            return prune_minecraft_data(mc_bot_dir) and (nm / "mineflayer").exists()
         else:
             print(f"❌ npm install failed (exit {result.returncode}):\n{result.stderr.strip()[-2000:]}")
     except Exception as e:
