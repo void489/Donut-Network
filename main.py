@@ -75,6 +75,45 @@ async def dynamic_prefix(bot: "Bot", message: discord.Message):
     return list(prefixes)
 
 
+def _ensure_local_node():
+    """Make 'node'/'npm' available on hosts that only ship Python.
+    Downloads a portable Node 22 into ./.local/node once, then adds it to PATH."""
+    import platform, tarfile, urllib.request, re
+    base = pathlib.Path(__file__).parent / ".local" / "node"
+    bindir = base / "bin"
+    if not (bindir / "node").exists() and not shutil.which("node"):
+        arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine().lower())
+        if not arch:
+            print(f"❌ Unsupported CPU for portable Node: {platform.machine()}")
+            return
+        try:
+            root = "https://nodejs.org/dist/latest-v22.x/"
+            sums = urllib.request.urlopen(root + "SHASUMS256.txt", timeout=30).read().decode()
+            m = re.search(rf"(node-v[\d.]+-linux-{arch}\.tar\.xz)", sums)
+            if not m:
+                print("❌ Could not find a Node.js download for this platform.")
+                return
+            fname = m.group(1)
+            print(f"⬇️  Downloading portable Node.js ({fname})...")
+            base.mkdir(parents=True, exist_ok=True)
+            tmp = base.parent / fname
+            urllib.request.urlretrieve(root + fname, tmp)
+            with tarfile.open(tmp, "r:xz") as tf:
+                for member in tf.getmembers():
+                    parts = member.name.split("/", 1)
+                    if len(parts) < 2 or not parts[1]:
+                        continue
+                    member.name = parts[1]
+                    tf.extract(member, base)
+            tmp.unlink(missing_ok=True)
+            print("✅ Portable Node.js installed.")
+        except Exception as e:
+            print(f"❌ Failed to install portable Node.js: {e}")
+            return
+    if bindir.is_dir():
+        os.environ["PATH"] = str(bindir) + os.pathsep + os.environ.get("PATH", "")
+
+
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -207,7 +246,7 @@ class Bot(commands.Bot):
         just 'mongodb', for schedule/session persistence). Runs `npm install`
         in that folder if it's missing, so a fresh deploy or a new host
         doesn't require manually remembering to install it."""
-        required = ["mongodb"]
+        required = ["mongodb", "mineflayer", "express"]
         missing = [pkg for pkg in required if not (mc_bot_dir / "node_modules" / pkg).exists()]
         if not missing:
             return
@@ -221,7 +260,7 @@ class Bot(commands.Bot):
         print(f"📦 Installing missing mc-bot dependencies ({', '.join(missing)})...")
         try:
             result = subprocess.run(
-                [npm_path, "install", *missing],
+                [npm_path, "install", "--omit=dev", "mongodb"],
                 cwd=str(mc_bot_dir),
                 capture_output=True,
                 text=True,
@@ -252,6 +291,7 @@ class Bot(commands.Bot):
 
         # ── Spawn MC bot subprocess ──────────────────────────────────────
         mc_bot_path = pathlib.Path(__file__).parent / "mc-bot" / "index.js"
+        await asyncio.to_thread(_ensure_local_node)
         node_path = shutil.which("node")
 
         if not node_path:
