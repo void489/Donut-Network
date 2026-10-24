@@ -251,7 +251,15 @@ class Bot(commands.Bot):
         in that folder if it's missing, so a fresh deploy or a new host
         doesn't require manually remembering to install it."""
         required = ["mongodb", "mineflayer", "express"]
-        missing = [pkg for pkg in required if not (mc_bot_dir / "node_modules" / pkg).exists()]
+        nm = mc_bot_dir / "node_modules"
+        missing = [pkg for pkg in required if not (nm / pkg).exists()]
+        # A half-written install (e.g. disk quota hit mid-install) leaves folders
+        # behind but with data files missing -> detect it and start clean.
+        marker = nm / "minecraft-data" / "minecraft-data" / "data" / "pc" / "common" / "features.json"
+        if (nm / "minecraft-data").exists() and not marker.exists():
+            print("⚠️  Broken minecraft-data install detected — reinstalling mc-bot dependencies cleanly...")
+            shutil.rmtree(nm, ignore_errors=True)
+            missing = list(required)
         if not missing:
             return
 
@@ -273,6 +281,21 @@ class Bot(commands.Bot):
                 timeout=180,
             )
             shutil.rmtree("/tmp/npm-cache", ignore_errors=True)
+            # Trim junk (docs, sourcemaps, tests) to save disk on small hosts
+            try:
+                for root, dirs, files in os.walk(mc_bot_dir / "node_modules"):
+                    for d in list(dirs):
+                        if d in (".github", "docs", "test", "tests", "__tests__", "example", "examples"):
+                            shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                            dirs.remove(d)
+                    for f in files:
+                        if f.endswith((".md", ".map", ".markdown")):
+                            try:
+                                os.remove(os.path.join(root, f))
+                            except OSError:
+                                pass
+            except Exception as e:
+                print(f"⚠️  node_modules cleanup skipped: {e}")
             if result.returncode == 0:
                 print(f"✅ Installed {', '.join(missing)} in mc-bot/.")
             else:
