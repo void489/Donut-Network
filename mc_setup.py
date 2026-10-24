@@ -99,9 +99,11 @@ def report_disk_usage():
 
 def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     """minecraft-data is ~300+ MB because it ships data for Bedrock and every
-    Java version ever. A Java bot on a modern server only needs recent versions.
-    Keeps 'common' folders (the library reads them at load time) and Java
-    versions >= 1.<MC_KEEP_MIN_MINOR> (default 20). Validates afterwards."""
+    Java version ever. Newer Java versions REUSE files from older version
+    folders (see data/dataPaths.json), so we only delete folders that no kept
+    version points to. Keeps Java 1.<MC_KEEP_MIN_MINOR>+ (default 20) and every
+    'common' folder, then loads every kept version to verify."""
+    import json
     import re
     nm = mc_bot_dir / "node_modules"
     data = nm / "minecraft-data" / "minecraft-data" / "data"
@@ -112,21 +114,33 @@ def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     except ValueError:
         keep_min = 20
 
-    pc = data / "pc"
-    kept = []
-    doomed = []
-    if pc.is_dir():
-        for d in pc.iterdir():
-            if not d.is_dir() or d.name == "common":
-                continue
-            m = re.match(r"^1\.(\d+)", d.name)
-            if m and int(m.group(1)) >= keep_min:
-                kept.append(d.name)
-            else:
-                doomed.append(d)
-    if not kept:
-        print("ℹ️  minecraft-data layout not recognised — skipping prune.")
+    try:
+        paths = json.loads((data / "dataPaths.json").read_text())["pc"]
+    except Exception as e:
+        print(f"ℹ️  Cannot read minecraft-data/dataPaths.json ({e}) — skipping prune.")
         return True
+
+    kept = [v for v in paths if re.match(r"^1\.(\d+)", v) and int(re.match(r"^1\.(\d+)", v).group(1)) >= keep_min]
+    if not kept:
+        print("ℹ️  No recent Java versions found in minecraft-data — skipping prune.")
+        return True
+
+    # every folder that a kept version reads from (own folder + shared ones)
+    needed = {"common"}
+    for v in kept:
+        for p in (paths[v] or {}).values():
+            if isinstance(p, str):
+                parts = p.strip("/").split("/")
+                if len(parts) >= 2 and parts[0] == "pc":
+                    needed.add(parts[1])
+                elif len(parts) == 1:
+                    needed.add(parts[0])
+    needed.update(kept)
+
+    doomed = []
+    pc = data / "pc"
+    if pc.is_dir():
+        doomed += [d for d in pc.iterdir() if d.is_dir() and d.name not in needed]
     bedrock = data / "bedrock"
     if bedrock.is_dir():
         doomed += [d for d in bedrock.iterdir() if d.is_dir() and d.name != "common"]
@@ -136,21 +150,21 @@ def prune_minecraft_data(mc_bot_dir: pathlib.Path):
     for d in doomed:
         shutil.rmtree(d, ignore_errors=True)
 
-    newest = sorted(kept, key=lambda v: [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-]", v)])[-1]
-    script = ("require('mineflayer');"
-              "const d=require('minecraft-data')(process.argv[1]);"
-              "if(!d||!d.blocksByName){process.exit(3)}")
+    script = ("require('mineflayer');const m=require('minecraft-data');"
+              "for(const v of process.argv.slice(1)){const d=m(v);"
+              "if(!d||!d.blocksByName||!d.windows&&d.windows!==undefined){process.exit(3)}}")
     try:
-        r = subprocess.run([shutil.which("node") or "node", "-e", script, newest],
-                           cwd=str(mc_bot_dir), capture_output=True, text=True, timeout=180)
+        r = subprocess.run([shutil.which("node") or "node", "-e", script, *kept],
+                           cwd=str(mc_bot_dir), capture_output=True, text=True, timeout=300)
         ok = r.returncode == 0
-        err = (r.stderr or "").strip()[-1500:]
+        err = (r.stderr or "").strip()
     except Exception as e:
         ok, err = False, str(e)
     if ok:
-        print(f"✂️  Pruned minecraft-data: removed {len(doomed)} old/bedrock version folders, kept Java 1.{keep_min}+ .")
+        print(f"✂️  Pruned minecraft-data: removed {len(doomed)} folders, kept {len(kept)} Java versions (1.{keep_min}+).")
         return True
 
+    err = err[:700] + "\n...\n" + err[-700:] if len(err) > 1500 else err
     print(f"❌ Pruning broke mineflayer. Error was:\n{err}")
     shutil.rmtree(nm, ignore_errors=True)
     try:
